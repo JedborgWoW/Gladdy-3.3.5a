@@ -2,8 +2,6 @@
 
 ### The most powerful arena addon for WoW 3.3.5a
 
-[![Donate](https://raw.githubusercontent.com/XiconQoo/Gladdy/readme-media/Paypal-Donate.png)](https://www.paypal.me/dnbjunkee/10)
-
 **Backport of [Gladdy Classic v2.72](https://github.com/XiconQoo/Gladdy-TBC) to WoW 3.3.5a (WoTLK private servers).**
 
 Based on https://github.com/miraage/gladdy
@@ -19,15 +17,6 @@ The goal of Gladdy is to make a highly configurable arena addon. Everything can 
 This version has been backported from WoTLK Classic (3.4.x) to work on **WoW 3.3.5a private servers**. All modern/retail APIs have been replaced with 3.3.5a-compatible alternatives.
 
 **Backported by:** [JedborgWoW](https://github.com/JedborgWoW)
-
-### Key backport changes:
-- Removed all `C_` namespace APIs (`C_Timer`, `C_NamePlate`, `C_AddOns`, `C_PvP`, `C_UnitAuras`, `C_Spell`, `C_CreatureInfo`, etc.)
-- Rewrote `COMBAT_LOG_EVENT_UNFILTERED` handling for 3.3.5a event signature
-- Replaced `BackdropTemplateMixin` with native 3.3.5a backdrop support
-- Replaced `CreateColor()` with table literals
-- Added compatibility polyfills for `C_Timer.After`, `FindAuraByName`, `GetSpellIdByName`
-- TBC, Cataclysm, and MoP specific code removed (WoTLK only)
-- Interface version set to 30300
 
 ## Modules
 
