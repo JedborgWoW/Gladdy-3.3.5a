@@ -14,6 +14,15 @@ local MAJOR, MINOR = "DRList-1.0", 82 -- Don't forget to change this in Spells.l
 local Lib = assert(LibStub, MAJOR .. " requires LibStub."):NewLibrary(MAJOR, MINOR)
 if not Lib then return end -- already loaded
 
+-- 3.3.5a compatibility: WOW_PROJECT constants
+local WOW_PROJECT_ID = WOW_PROJECT_ID or 0
+local WOW_PROJECT_MAINLINE = WOW_PROJECT_MAINLINE or 1
+local WOW_PROJECT_CLASSIC = WOW_PROJECT_CLASSIC or 2
+local WOW_PROJECT_WRATH_CLASSIC = WOW_PROJECT_WRATH_CLASSIC or 11
+local WOW_PROJECT_BURNING_CRUSADE_CLASSIC = WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 5
+local WOW_PROJECT_CATACLYSM_CLASSIC = WOW_PROJECT_CATACLYSM_CLASSIC or 14
+local WOW_PROJECT_MISTS_CLASSIC = WOW_PROJECT_MISTS_CLASSIC or 19
+
 local GetSpellName = C_Spell and C_Spell.GetSpellName or GetSpellInfo
 local type = type
 
@@ -125,6 +134,7 @@ end
 -------------------------------------------------------------------------------
 
 -- Check what game version we're running
+-- 3.3.5a: WOW_PROJECT_ID doesn't exist, default to "wotlk"
 Lib.gameExpansion = ({
     [WOW_PROJECT_MAINLINE] = "retail",
     [WOW_PROJECT_CLASSIC] = "classic",
@@ -132,7 +142,7 @@ Lib.gameExpansion = ({
     [WOW_PROJECT_WRATH_CLASSIC or 11] = "wotlk",
     [WOW_PROJECT_CATACLYSM_CLASSIC or 14] = "cata",
     [WOW_PROJECT_MISTS_CLASSIC or 19] = "mop",
-})[WOW_PROJECT_ID] or "mop" -- Fallback to "mop" for unknown IDs (likely a new Classic expansion build)
+})[WOW_PROJECT_ID] or "wotlk" -- Fallback to "wotlk" for 3.3.5a where WOW_PROJECT_ID doesn't exist
 
 -- How long it takes for a DR to expire, in seconds.
 Lib.resetTimes = {

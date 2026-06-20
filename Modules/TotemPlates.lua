@@ -1,10 +1,28 @@
 local select, pairs, tremove, tinsert, format, strsplit, tonumber, ipairs = select, pairs, tremove, tinsert, format, strsplit, tonumber, ipairs
 local UnitExists, UnitIsUnit, UnitIsEnemy, UnitGUID = UnitExists, UnitIsUnit, UnitIsEnemy, UnitGUID
-local C_NamePlate = C_NamePlate
 local Gladdy = LibStub("Gladdy")
 local L = Gladdy.L
 local GetSpellInfo, CreateFrame = GetSpellInfo, CreateFrame
+local IsAddOnLoaded = IsAddOnLoaded
 local totemData, npcIdToTotemData = Gladdy:GetTotemData()
+
+-- 3.3.5a compatible nameplate lookup
+local _NamePlateAPI = rawget(_G, "C_NamePlate")
+local function GetNamePlateForUnit(unitID)
+    if _NamePlateAPI and _NamePlateAPI.GetNamePlateForUnit then
+        return _NamePlateAPI.GetNamePlateForUnit(unitID)
+    end
+    local frame = _G["NamePlate" .. unitID]
+    if not frame then
+        for i = 1, WorldFrame:GetNumChildren() do
+            local child = select(i, WorldFrame:GetChildren())
+            if child and child.UnitFrame and child.UnitFrame.unit == unitID then
+                return child
+            end
+        end
+    end
+    return frame
+end
 
 ---------------------------------------------------
 
@@ -234,20 +252,20 @@ function TotemPlates:Initialize()
         SetCVar("nameplateShowFriendlyTotems", true);
     end
     self.addon = "Blizzard"
-    if (C_AddOns.IsAddOnLoaded("Plater")) then
+    if (IsAddOnLoaded("Plater")) then
         self.addon = "Plater"
-    elseif (C_AddOns.IsAddOnLoaded("Kui_Nameplates")) then
+    elseif (IsAddOnLoaded("Kui_Nameplates")) then
         self.addon = "Kui_Nameplates"
-    elseif (C_AddOns.IsAddOnLoaded("NeatPlates")) then
+    elseif (IsAddOnLoaded("NeatPlates")) then
         self.addon = "NeatPlates"
-    elseif (C_AddOns.IsAddOnLoaded("TidyPlates_ThreatPlates")) then
+    elseif (IsAddOnLoaded("TidyPlates_ThreatPlates")) then
         self.addon = "TidyPlates_ThreatPlates"
-    elseif (C_AddOns.IsAddOnLoaded("Tukui")) then
+    elseif (IsAddOnLoaded("Tukui")) then
         local _, C, _ = Tukui:unpack()
         if C.NamePlates.Enable then
             self.addon = "Tukui"
         end
-    elseif (C_AddOns.IsAddOnLoaded("ElvUI")) then
+    elseif (IsAddOnLoaded("ElvUI")) then
         local E = unpack(ElvUI)
         if E.private.nameplates.enable then
             self.addon = "ElvUI"
@@ -277,7 +295,7 @@ function TotemPlates:NAME_PLATE_UNIT_ADDED(unitID)
 end
 
 function TotemPlates:NAME_PLATE_UNIT_REMOVED(unitID)
-    local nameplate = C_NamePlate.GetNamePlateForUnit(unitID)
+    local nameplate = GetNamePlateForUnit(unitID)
     self.activeTotemNameplates[unitID] = nil
     if nameplate.gladdyTotemFrame then
         nameplate.gladdyTotemFrame:Hide()
@@ -496,7 +514,7 @@ end
 
 function TotemPlates:OnUnitEvent(unitID)
     local isEnemy = UnitIsEnemy("player", unitID)
-    local nameplate = C_NamePlate.GetNamePlateForUnit(unitID)
+    local nameplate = GetNamePlateForUnit(unitID)
     if not nameplate then
         return
     end

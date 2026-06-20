@@ -177,7 +177,6 @@ function Pets:CreateFrame(unitId)
 
     local secure = CreateFrame("Button", "GladdyButton" .. unit, button, "SecureActionButtonTemplate, SecureHandlerEnterLeaveTemplate")
     secure:RegisterForClicks("AnyUp")
-    secure:RegisterForClicks("AnyDown")
     secure:SetAttribute("*type1", "target")
     secure:SetAttribute("*type2", "focus")
     secure:SetAttribute("unit", unit)

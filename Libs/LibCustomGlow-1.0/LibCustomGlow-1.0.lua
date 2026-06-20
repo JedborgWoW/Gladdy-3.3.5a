@@ -12,6 +12,10 @@ local lib, oldversion = LibStub:NewLibrary(MAJOR_VERSION, MINOR_VERSION)
 if not lib then return end
 local Masque = LibStub("Masque", true)
 
+-- 3.3.5a compatibility: WOW_PROJECT constants
+local WOW_PROJECT_ID = WOW_PROJECT_ID or 0
+local WOW_PROJECT_MAINLINE = WOW_PROJECT_MAINLINE or 1
+
 local isRetail = WOW_PROJECT_ID == WOW_PROJECT_MAINLINE
 local textureList = {
     empty = [[Interface\AdventureMap\BrokenIsles\AM_29]],
