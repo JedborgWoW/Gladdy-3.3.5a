@@ -27,7 +27,36 @@ local activeTimers = AceTimer.activeTimers -- Upvalue our private data
 -- Lua APIs
 local type, unpack, next, error, select = type, unpack, next, error, select
 -- WoW APIs
-local GetTime, C_TimerAfter = GetTime, C_Timer.After
+local GetTime = GetTime
+
+-- C_Timer.After polyfill for 3.3.5a compatibility
+local C_TimerAfter
+if C_Timer and C_Timer.After then
+    C_TimerAfter = C_Timer.After
+else
+    local timerFrame = CreateFrame("Frame")
+    local timers = {}
+    timerFrame:SetScript("OnUpdate", function(self, elapsed)
+        local i = 1
+        while i <= #timers do
+            timers[i].delay = timers[i].delay - elapsed
+            if timers[i].delay <= 0 then
+                timers[i].callback()
+                table.remove(timers, i)
+            else
+                i = i + 1
+            end
+        end
+        if #timers == 0 then
+            self:Hide()
+        end
+    end)
+    timerFrame:Hide()
+    C_TimerAfter = function(delay, callback)
+        table.insert(timers, {delay = delay, callback = callback})
+        timerFrame:Show()
+    end
+end
 
 local function new(self, loop, func, delay, ...)
 	if delay < 0.01 then

@@ -9,11 +9,20 @@ LibClassAuras.buffs = {}
 LibClassAuras.buffToId = {}
 LibClassAuras.altNames = {}
 
+-- 3.3.5a compatibility: WOW_PROJECT constants
+local WOW_PROJECT_ID = WOW_PROJECT_ID or 0
+local WOW_PROJECT_MAINLINE = WOW_PROJECT_MAINLINE or 1
+local WOW_PROJECT_CLASSIC = WOW_PROJECT_CLASSIC or 2
+local WOW_PROJECT_WRATH_CLASSIC = WOW_PROJECT_WRATH_CLASSIC or 11
+local WOW_PROJECT_BURNING_CRUSADE_CLASSIC = WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 5
+
+-- 3.3.5a: WOW_PROJECT_ID doesn't exist, default to nil (addon handles nil case)
 LibClassAuras.gameExpansion = ({
     [WOW_PROJECT_MAINLINE] = "retail",
     [WOW_PROJECT_CLASSIC] = "classic",
-    [WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 5] = "tbc"
-})[WOW_PROJECT_ID]
+    [WOW_PROJECT_BURNING_CRUSADE_CLASSIC or 5] = "tbc",
+    [WOW_PROJECT_WRATH_CLASSIC or 11] = "wotlk"
+})[WOW_PROJECT_ID] or "wotlk"
 
 local function Spell(id, opts, class, spellTable, idTable)
     if not opts or not class then

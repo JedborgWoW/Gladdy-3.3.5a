@@ -1,11 +1,27 @@
 local select, pairs, tremove, tinsert, format, strsplit, tonumber = select, pairs, tremove, tinsert, format, strsplit, tonumber
 local type = type
-local C_NamePlate = C_NamePlate
 local Gladdy = LibStub("Gladdy")
 local L = Gladdy.L
 local GetSpellInfo, CreateFrame = GetSpellInfo, CreateFrame
 local GetTime, UnitIsEnemy, UnitGUID = GetTime, UnitIsEnemy, UnitGUID
-local CombatLogGetCurrentEventInfo = CombatLogGetCurrentEventInfo
+
+-- 3.3.5a compatible nameplate lookup
+local _NamePlateAPI = rawget(_G, "C_NamePlate")
+local function GetNamePlateForUnit(unitID)
+    if _NamePlateAPI and _NamePlateAPI.GetNamePlateForUnit then
+        return _NamePlateAPI.GetNamePlateForUnit(unitID)
+    end
+    local frame = _G["NamePlate" .. unitID]
+    if not frame then
+        for i = 1, WorldFrame:GetNumChildren() do
+            local child = select(i, WorldFrame:GetChildren())
+            if child and child.UnitFrame and child.UnitFrame.unit == unitID then
+                return child
+            end
+        end
+    end
+    return frame
+end
 local UIParent = UIParent
 
 ---------------------------------------------------
@@ -165,8 +181,7 @@ function TotemPulse:PLAYER_ENTERING_WORLD()
     self.timeStamps = {}
 end
 
-function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED()
-    local _,eventType,_,sourceGUID,_,_,_,destGUID,_,_,_,spellID,spellName = CombatLogGetCurrentEventInfo()
+function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName)
     local pulse = cooldowns[spellID] or cooldowns[spellName]
     local npcId = tonumber(select(6, strsplit("-", destGUID)), 10)
     if eventType == "UNIT_DESTROYED" and self.timeStamps[destGUID] then
@@ -199,7 +214,7 @@ function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED()
 end
 
 function TotemPulse:NAME_PLATE_UNIT_REMOVED(unitId)
-    local nameplate = C_NamePlate.GetNamePlateForUnit(unitId)
+    local nameplate = GetNamePlateForUnit(unitId)
     if nameplate.totemTick then
         nameplate.totemTick:SetScript("OnUpdate", nil)
         nameplate.totemTick:Hide()
@@ -226,7 +241,7 @@ function TotemPulse:OnUnitAdded(unitId)
         return
     end
 
-    local nameplate = C_NamePlate.GetNamePlateForUnit(unitId)
+    local nameplate = GetNamePlateForUnit(unitId)
 
     if nameplate and (isEnemy and Gladdy.db.totemPulseEnabledShowEnemy or not isEnemy and Gladdy.db.totemPulseEnabledShowFriendly) then
         if self.timeStamps[guid] and strsplit("-", guid) then
@@ -291,7 +306,7 @@ function TotemPulse:CreateCooldownFrame(style)
             totemTick:SetWidth(Gladdy.db.totemPulseBarWidth)
             totemTick:SetHeight(Gladdy.db.totemPulseBarHeight)
 
-            totemTick.backdrop = CreateFrame("Frame", nil, totemTick, BackdropTemplateMixin and "BackdropTemplate")
+            totemTick.backdrop = CreateFrame("Frame", nil, totemTick, nil)
             totemTick.backdrop:SetAllPoints(totemTick)
             totemTick.backdrop:SetBackdrop({ edgeFile = Gladdy:SMFetch("border", "totemPulseBarBorderStyle"),
                                              edgeSize = Gladdy.db.totemPulseBarBorderSize })

@@ -29,7 +29,7 @@ if not Lib.updaterFrame then
 end
 Lib.updaterFrame:UnregisterAllEvents()
 
-if C_Spell.IsSpellInRange then
+if C_Spell and C_Spell.IsSpellInRange then
 	-- In TWW, IsSpellInRange supports both spell names and IDs
 	-- and also automatically handles override spells (i.e. when given a base spell
 	-- that has an active override, the range of the override is what's checked -
@@ -60,13 +60,13 @@ if C_Spell.IsSpellInRange then
 end
 
 
-local GetSpellBookItemInfo = _G.GetSpellBookItemInfo or _G.C_SpellBook.GetSpellBookItemType
-local GetSpellBookItemName = _G.GetSpellBookItemName or _G.C_SpellBook.GetSpellBookItemName
-local GetSpellLink = _G.GetSpellLink or _G.C_Spell.GetSpellLink
-local GetSpellName = _G.GetSpellInfo or _G.C_Spell.GetSpellName
+local GetSpellBookItemInfo = _G.GetSpellBookItemInfo or (_G.C_SpellBook and _G.C_SpellBook.GetSpellBookItemType)
+local GetSpellBookItemName = _G.GetSpellBookItemName or (_G.C_SpellBook and _G.C_SpellBook.GetSpellBookItemName)
+local GetSpellLink = _G.GetSpellLink or (_G.C_Spell and _G.C_Spell.GetSpellLink)
+local GetSpellName = _G.GetSpellInfo or (_G.C_Spell and _G.C_Spell.GetSpellName)
 
 local IsSpellInRange = _G.IsSpellInRange
-local IsSpellBookItemInRange = _G.IsSpellInRange or function(index, spellBank, unit)
+local IsSpellBookItemInRange = _G.IsSpellInRange or (C_SpellBook and function(index, spellBank, unit)
 	local result = C_SpellBook.IsSpellBookItemInRange(index, spellBank, unit)
 	if result == true then
 		return 1
@@ -74,10 +74,10 @@ local IsSpellBookItemInRange = _G.IsSpellInRange or function(index, spellBank, u
 		return 0
 	end
 	return nil
-end
+end)
 
 local SpellHasRange = _G.SpellHasRange
-local SpellBookHasRange = _G.SpellHasRange or _G.C_SpellBook.IsSpellBookItemInRange
+local SpellBookHasRange = _G.SpellHasRange or (_G.C_SpellBook and _G.C_SpellBook.IsSpellBookItemInRange)
 
 local UnitExists = _G.UnitExists
 local GetPetActionInfo = _G.GetPetActionInfo
@@ -144,8 +144,8 @@ local petSpellHasRange = Lib.petSpellHasRange
 
 -- Updates spellsByName and spellsByID
 
-local GetNumSpellTabs = _G.GetNumSpellTabs or C_SpellBook.GetNumSpellBookSkillLines
-local GetSpellTabInfo = _G.GetSpellTabInfo or function(index)
+local GetNumSpellTabs = _G.GetNumSpellTabs or (C_SpellBook and C_SpellBook.GetNumSpellBookSkillLines)
+local GetSpellTabInfo = _G.GetSpellTabInfo or (C_SpellBook and function(index)
 	local skillLineInfo = C_SpellBook.GetSpellBookSkillLineInfo(index);
 	if skillLineInfo then
 		return	skillLineInfo.name,
@@ -157,7 +157,7 @@ local GetSpellTabInfo = _G.GetSpellTabInfo or function(index)
 		skillLineInfo.shouldHide,
 		skillLineInfo.specID;
 	end
-end
+end)
 
 local function UpdateBook(bookType)
 	local book = bookType == "spell" and playerBook or petBook

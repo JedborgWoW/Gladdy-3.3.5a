@@ -11,8 +11,13 @@ local pairs = pairs
 -- WoW APIs
 local CreateFrame, UIParent = CreateFrame, UIParent
 
+-- 3.3.5a compatibility: WOW_PROJECT constants
+local WOW_PROJECT_ID = WOW_PROJECT_ID or 0
+local WOW_PROJECT_MAINLINE = WOW_PROJECT_MAINLINE or 1
+
 -- Unfortunately we have no way to realistically detect if a client uses inverted alpha
 -- as no API will tell you. Wrath uses the old colorpicker, era uses the new one, both are inverted
+-- In 3.3.5a the alpha slider IS inverted (like Classic)
 local INVERTED_ALPHA = (WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE)
 
 --[[-----------------------------------------------------------------------------

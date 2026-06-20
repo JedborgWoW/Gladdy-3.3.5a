@@ -291,9 +291,7 @@ function Gladdy:Dump(table, space)
     end
 end
 
-function Gladdy:GetSpellDescription(spellID, cooldown) -- GetSpellPowerCost(51052) GetSpellDescription(2983)
-    local cost = (GetSpellPowerCost(spellID) and GetSpellPowerCost(spellID)[1] and (GetSpellPowerCost(spellID)[1].cost .. " " .. _G[GetSpellPowerCost(spellID)[1].name])) or ""
-    cost = cost .. (cost ~= "" and "\n\n" or "")
+function Gladdy:GetSpellDescription(spellID, cooldown)
     local castTimeInfo = select(4, GetSpellInfo(spellID))
     local castTime = tonumber(castTimeInfo)
 
@@ -341,16 +339,9 @@ function Gladdy:GetSpellDescription(spellID, cooldown) -- GetSpellPowerCost(5105
         end
     end
     str = str .. castTime
-    local desc = GetSpellDescription(spellID)
-    if not desc or desc == "" then -- TODO wait for event
-        for i=1, 100 do
-            desc = GetSpellDescription(spellID)
-            if desc and desc ~= "" then
-                break
-            end
-        end
-    end
-    str = str .. Gladdy:SetTextColor(desc, {r = 1, g=0.82, b=0})
+    -- GetSpellDescription is not available in 3.3.5a, show spell name instead
+    local spellName = GetSpellInfo(spellID)
+    str = str .. Gladdy:SetTextColor(spellName or "", {r = 1, g=0.82, b=0})
     str = str .. "\n\n" .. Gladdy:SetTextColor("spell ids", {r = 0, g=0.82, b=0}) .. "\n"
     if cooldown and cooldown.spellIDs then
         for i,rankedSpellID in ipairs(cooldown.spellIDs) do

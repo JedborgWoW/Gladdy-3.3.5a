@@ -242,17 +242,25 @@ function ChatThrottleLib:Init()
 			end)
 		end
 		--SendAddonMessage
-		hooksecurefunc(_G.C_ChatInfo, "SendAddonMessage", function(...)
-			return ChatThrottleLib.Hook_SendAddonMessage(...)
-		end)
+		if _G.C_ChatInfo and _G.C_ChatInfo.SendAddonMessage then
+			hooksecurefunc(_G.C_ChatInfo, "SendAddonMessage", function(...)
+				return ChatThrottleLib.Hook_SendAddonMessage(...)
+			end)
+		elseif _G.SendAddonMessage then
+			hooksecurefunc("SendAddonMessage", function(...)
+				return ChatThrottleLib.Hook_SendAddonMessage(...)
+			end)
+		end
 	end
 
 	-- v26: Hook SendAddonMessageLogged for traffic logging
 	if not self.securelyHookedLogged then
 		self.securelyHookedLogged = true
-		hooksecurefunc(_G.C_ChatInfo, "SendAddonMessageLogged", function(...)
-			return ChatThrottleLib.Hook_SendAddonMessageLogged(...)
-		end)
+		if _G.C_ChatInfo and _G.C_ChatInfo.SendAddonMessageLogged then
+			hooksecurefunc(_G.C_ChatInfo, "SendAddonMessageLogged", function(...)
+				return ChatThrottleLib.Hook_SendAddonMessageLogged(...)
+			end)
+		end
 	end
 
 	-- v29: Hook BNSendGameData for traffic logging
@@ -262,7 +270,7 @@ function ChatThrottleLib:Init()
 			hooksecurefunc(_G.C_BattleNet, "SendGameData", function(...)
 				return ChatThrottleLib.Hook_BNSendGameData(...)
 			end)
-		else
+		elseif _G.BNSendGameData then
 			hooksecurefunc("BNSendGameData", function(...)
 				return ChatThrottleLib.Hook_BNSendGameData(...)
 			end)
@@ -344,7 +352,7 @@ end
 -- - ... made up of N "Pipe"s (1 for each destination/pipename)
 -- - and each pipe contains messages
 
-local SendAddonMessageResult = Enum.SendAddonMessageResult or {
+local SendAddonMessageResult = (Enum and Enum.SendAddonMessageResult) or {
 	Success = 0,
 	AddonMessageThrottle = 3,
 	NotInGroup = 5,
@@ -424,7 +432,7 @@ function ChatThrottleLib:Despool(Prio)
 
 			-- Notify caller of message submission.
 			if msg.callbackFn then
-				securecallfunction(msg.callbackFn, msg.callbackArg, didSend, sendResult)
+				(securecallfunction or pcall)(msg.callbackFn, msg.callbackArg, didSend, sendResult)
 			end
 		end
 	end
@@ -564,7 +572,7 @@ function ChatThrottleLib:SendChatMessage(prio, prefix,   text, chattype, languag
 			end
 
 			if callbackFn then
-				securecallfunction(callbackFn, callbackArg, didSend, sendResult)
+				(securecallfunction or pcall)(callbackFn, callbackArg, didSend, sendResult)
 			end
 
 			return
@@ -603,7 +611,7 @@ local function SendAddonMessageInternal(self, sendFunction, prio, prefix, text, 
 			end
 
 			if callbackFn then
-				securecallfunction(callbackFn, callbackArg, didSend, sendResult)
+				(securecallfunction or pcall)(callbackFn, callbackArg, didSend, sendResult)
 			end
 
 			return
@@ -635,7 +643,7 @@ function ChatThrottleLib:SendAddonMessage(prio, prefix, text, chattype, target, 
 		error("ChatThrottleLib:SendAddonMessage(): message length cannot exceed 255 bytes", 2)
 	end
 
-	local sendFunction = _G.C_ChatInfo.SendAddonMessage
+	local sendFunction = (_G.C_ChatInfo and _G.C_ChatInfo.SendAddonMessage) or _G.SendAddonMessage
 	SendAddonMessageInternal(self, sendFunction, prio, prefix, text, chattype, target, queueName, callbackFn, callbackArg)
 end
 
@@ -649,7 +657,7 @@ function ChatThrottleLib:SendAddonMessageLogged(prio, prefix, text, chattype, ta
 		error("ChatThrottleLib:SendAddonMessageLogged(): message length cannot exceed 255 bytes", 2)
 	end
 
-	local sendFunction = _G.C_ChatInfo.SendAddonMessageLogged
+	local sendFunction = (_G.C_ChatInfo and _G.C_ChatInfo.SendAddonMessageLogged) or (_G.C_ChatInfo and _G.C_ChatInfo.SendAddonMessage) or _G.SendAddonMessage
 	SendAddonMessageInternal(self, sendFunction, prio, prefix, text, chattype, target, queueName, callbackFn, callbackArg)
 end
 

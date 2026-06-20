@@ -927,7 +927,7 @@ function Gladdy:SetupOptions()
                 desc = L["Load configuration options"],
                 type = "execute",
                 func = function()
-                    HideUIPanel(SettingsPanel)
+                    if SettingsPanel then HideUIPanel(SettingsPanel) end
                     LibStub("AceConfigDialog-3.0"):Open("Gladdy")
                 end,
             },

@@ -299,7 +299,7 @@ end
 -- }}
 -- This function is only executed once and them removed, because the same predictor frame is used for all widgets
 local function CreatePredictorFrame(num)
-	local predictor = CreateFrame("Frame", "AceGUI30GladdySearchEditBox" .. num .. "Predictor", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+	local predictor = CreateFrame("Frame", "AceGUI30GladdySearchEditBox" .. num .. "Predictor", UIParent, nil)
 	predictor:SetBackdrop(predictorBackdrop)
 	predictor:SetBackdropColor(0, 0, 0, 0.85)
 	predictor:SetFrameStrata("TOOLTIP")

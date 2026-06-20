@@ -192,7 +192,7 @@ local function Constructor()
 
 	button:EnableMouse(true)
 	button:EnableMouseWheel(false)
-	button:RegisterForClicks("AnyDown")
+	button:RegisterForClicks("AnyUp")
 	button:SetScript("OnEnter", Control_OnEnter)
 	button:SetScript("OnLeave", Control_OnLeave)
 	button:SetScript("OnClick", Keybinding_OnClick)

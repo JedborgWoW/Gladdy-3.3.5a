@@ -1,6 +1,5 @@
 local type, pairs, ipairs, ceil, tonumber, mod, tostring, upper, select, tinsert, tremove = type, pairs, ipairs, ceil, tonumber, mod, tostring, string.upper, select, tinsert, tremove
 local tbl_sort = table.sort
-local C_Timer = C_Timer
 local GetTime = GetTime
 local CreateFrame = CreateFrame
 local GetSpellInfo = GetSpellInfo
@@ -10,6 +9,15 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local Gladdy = LibStub("Gladdy")
 local LCG = LibStub("LibCustomGlow-1.0")
 local L = Gladdy.L
+
+-- 3.3.5a compat: CreateTextureMarkup may not exist
+local CreateTextureMarkup = CreateTextureMarkup or function(file, fileWidth, fileHeight, width, height, left, right, top, bottom, xOffset, yOffset)
+    return string.format("|T%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d|t", file, height, width, xOffset or 0, yOffset or 0, fileWidth, fileHeight, left * fileWidth, right * fileWidth, top * fileHeight, bottom * fileHeight)
+end
+-- 3.3.5a compat: GetSpellTexture may not exist
+local GetSpellTexture = GetSpellTexture or function(spellID)
+    return select(3, GetSpellInfo(spellID))
+end
 
 local function tableLength(tbl)
     local getN = 0
@@ -348,7 +356,7 @@ function Cooldowns:UpdateIcon(icon)
     else
         icon.texture:SetAlpha(1)
     end
-    if icon.timer and not icon.timer:IsCancelled() then
+    if icon.timer then
         LCG.PixelGlow_Start(icon.glow, Gladdy:ColorAsArray(Gladdy.db.cooldownIconGlowColor), 12, 0.15, nil, 2)
     end
 
@@ -596,7 +604,8 @@ function Cooldowns:ClearIcon(button, index, spellId, icon)
     icon:Show()
     LCG.PixelGlow_Stop(icon.glow)
     if icon.timer then
-        icon.timer:Cancel()
+        Gladdy:CancelTimer(icon.timer)
+        icon.timer = nil
     end
     icon:ClearAllPoints()
     icon:SetParent(nil)
@@ -657,7 +666,8 @@ function Cooldowns:UpdateTestCooldowns(unit, showTalents)
 
     for _,icon in ipairs(orderedIcons) do
         if icon.timer then
-            icon.timer:Cancel()
+            Gladdy:CancelTimer(icon.timer)
+            icon.timer = nil
         end
     end
     local talents = {}
@@ -726,12 +736,12 @@ function Cooldowns:AURA_GAIN(_, auraType, spellID, spellName, _, duration, _, _,
             Gladdy:Debug("INFO", "Cooldowns:AURA_GAIN", "PixelGlow_Start", spellID)
             LCG.PixelGlow_Start(icon.glow, Gladdy:ColorAsArray(Gladdy.db.cooldownIconGlowColor), 12, 0.15, nil, 2)
             if icon.timer then
-                icon.timer:Cancel()
+                Gladdy:CancelTimer(icon.timer)
             end
-            icon.timer = C_Timer.NewTimer(duration, function()
+            icon.timer = Gladdy:ScheduleTimer(function()
                 LCG.PixelGlow_Stop(icon.glow)
-                icon.timer:Cancel()
-            end)
+                icon.timer = nil
+            end, duration)
         end
     end
 end
@@ -747,7 +757,8 @@ function Cooldowns:AURA_FADE(unit, spellID, spellName)
         if (icon.spellId == spellId) then
             Gladdy:Debug("INFO", "Cooldowns:AURA_FADE", "LCG.ButtonGlow_Stop")
             if icon.timer then
-                icon.timer:Cancel()
+                Gladdy:CancelTimer(icon.timer)
+                icon.timer = nil
             end
             LCG.PixelGlow_Stop(icon.glow)
         end
@@ -900,7 +911,8 @@ local function resetIcon(icon)
     --if icon.flash then icon.flash:SetAlpha(0); icon.flash:Hide() end
     icon:SetScript("OnUpdate", nil)
     if icon.timer then
-        icon.timer:Cancel()
+        Gladdy:CancelTimer(icon.timer)
+        icon.timer = nil
     end
     LCG.PixelGlow_Stop(icon.glow)
 end
