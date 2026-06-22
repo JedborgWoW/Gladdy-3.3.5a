@@ -1,8 +1,8 @@
 local tonumber, tostring, str_format = tonumber, tostring, string.format
 
 local UnitName = UnitName
-local IsInGroup, IsInRaid = IsInGroup, IsInRaid
-local LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE = LE_PARTY_CATEGORY_HOME, LE_PARTY_CATEGORY_INSTANCE
+local GetNumPartyMembers = GetNumPartyMembers
+local GetNumRaidMembers = GetNumRaidMembers
 
 local Gladdy = LibStub("Gladdy")
 
@@ -23,11 +23,9 @@ end
 
 function VersionCheck:JOINED_ARENA()
     self:RegisterComm("GladdyVCheck", VersionCheck.OnCommReceived)
-    if IsInRaid(LE_PARTY_CATEGORY_HOME) then
+    if GetNumRaidMembers() > 0 then
         self:SendCommMessage("GladdyVCheck", str_format("%.2f", Gladdy.version_num), "RAID", self.playerName)
-    elseif IsInGroup(LE_PARTY_CATEGORY_INSTANCE) or IsInRaid(LE_PARTY_CATEGORY_INSTANCE) then
-        self:SendCommMessage("GladdyVCheck", str_format("%.2f", Gladdy.version_num), "INSTANCE_CHAT", self.playerName)
-    elseif IsInGroup(LE_PARTY_CATEGORY_HOME) then
+    elseif GetNumPartyMembers() > 0 then
         self:SendCommMessage("GladdyVCheck", str_format("%.2f", Gladdy.version_num), "PARTY", self.playerName)
     end
 end

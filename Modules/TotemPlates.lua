@@ -6,22 +6,65 @@ local GetSpellInfo, CreateFrame = GetSpellInfo, CreateFrame
 local IsAddOnLoaded = IsAddOnLoaded
 local totemData, npcIdToTotemData = Gladdy:GetTotemData()
 
--- 3.3.5a compatible nameplate lookup
-local _NamePlateAPI = rawget(_G, "C_NamePlate")
-local function GetNamePlateForUnit(unitID)
-    if _NamePlateAPI and _NamePlateAPI.GetNamePlateForUnit then
-        return _NamePlateAPI.GetNamePlateForUnit(unitID)
+---------------------------------------------------
+
+-- 3.3.5a Nameplate Scanner Helpers
+
+---------------------------------------------------
+
+-- Build a lookup table: lowercased totem name -> totemDataEntry (from npcIdToTotemData)
+-- We also keep the totemData keys (already lowercased names) for matching.
+local totemNameToData = {}
+for name, entry in pairs(totemData) do
+    -- totemData is keyed by string_lower(totemName)
+    totemNameToData[name] = entry
+end
+
+-- In 3.3.5a, nameplates are children of WorldFrame.
+-- A nameplate child typically has regions: healthBar, nameText, etc.
+-- We detect them by checking for specific child/region patterns.
+local function IsNameplate(frame)
+    if not frame then return false end
+    local name = frame:GetName()
+    -- Some 3.3.5a clients use NamePlate prefix
+    if name and name:find("^NamePlate") then
+        return true
     end
-    local frame = _G["NamePlate" .. unitID]
-    if not frame then
-        for i = 1, WorldFrame:GetNumChildren() do
-            local child = select(i, WorldFrame:GetChildren())
-            if child and child.UnitFrame and child.UnitFrame.unit == unitID then
-                return child
+    -- Heuristic: check for a health bar region (first child region is often the health bar)
+    local regions = { frame:GetRegions() }
+    if #regions < 2 then return false end
+    local children = { frame:GetChildren() }
+    if #children < 1 then return false end
+    -- Check if first child looks like a statusbar (health bar)
+    local firstChild = children[1]
+    if firstChild and firstChild.GetObjectType and firstChild:GetObjectType() == "StatusBar" then
+        return true
+    end
+    return false
+end
+
+-- Extract the name text from a 3.3.5a nameplate frame
+local function GetNameplateNameText(frame)
+    -- Try common nameplate addon patterns first
+    if frame.UnitFrame and frame.UnitFrame.name then
+        local text = frame.UnitFrame.name:GetText()
+        if text then return text end
+    end
+    if frame.unitFrame and frame.unitFrame.name then
+        local text = frame.unitFrame.name:GetText()
+        if text then return text end
+    end
+    -- Default 3.3.5a nameplate: name is typically the second region (a FontString)
+    local regions = { frame:GetRegions() }
+    for _, region in ipairs(regions) do
+        if region.GetText and region:IsObjectType("FontString") then
+            local text = region:GetText()
+            if text and text ~= "" then
+                return text
             end
         end
     end
-    return frame
+    return nil
 end
 
 ---------------------------------------------------
@@ -234,23 +277,162 @@ function TotemPlates.OnEvent(self, event, ...)
     TotemPlates[event](self, ...)
 end
 
+---------------------------------------------------
+
+-- 3.3.5a Nameplate Scanner (replaces NAME_PLATE_UNIT_ADDED / NAME_PLATE_UNIT_REMOVED)
+
+---------------------------------------------------
+
+local SCAN_INTERVAL = 0.15 -- seconds between scans
+local scannerFrame = CreateFrame("Frame")
+scannerFrame.elapsed = 0
+scannerFrame.knownPlates = {} -- [nameplateFrame] = true
+
+local function ScannerOnUpdate(self, elapsed)
+    self.elapsed = self.elapsed + elapsed
+    if self.elapsed < SCAN_INTERVAL then return end
+    self.elapsed = 0
+
+    if not Gladdy.db.npTotems then return end
+
+    local currentPlates = {}
+    local children = { WorldFrame:GetChildren() }
+    for _, child in ipairs(children) do
+        if child:IsVisible() and IsNameplate(child) then
+            currentPlates[child] = true
+            if not self.knownPlates[child] then
+                -- New nameplate appeared
+                self.knownPlates[child] = true
+                TotemPlates:OnNameplateAdded(child)
+            end
+        end
+    end
+
+    -- Check for removed nameplates
+    for plate in pairs(self.knownPlates) do
+        if not currentPlates[plate] then
+            self.knownPlates[plate] = nil
+            TotemPlates:OnNameplateRemoved(plate)
+        end
+    end
+end
+
+function TotemPlates:StartScanner()
+    scannerFrame:SetScript("OnUpdate", ScannerOnUpdate)
+end
+
+function TotemPlates:StopScanner()
+    scannerFrame:SetScript("OnUpdate", nil)
+    -- Clean up any tracked nameplates
+    for plate in pairs(scannerFrame.knownPlates) do
+        self:OnNameplateRemoved(plate)
+    end
+    scannerFrame.knownPlates = {}
+end
+
+function TotemPlates:OnNameplateAdded(nameplate)
+    local nameText = GetNameplateNameText(nameplate)
+    if not nameText then return end
+
+    local totemDataEntry = totemNameToData[nameText:lower()]
+    if not totemDataEntry then return end
+
+    local dbTotemData = totemDataEntry.npc and totemDataEntry or Gladdy.db.npTotemOptions["totem" .. totemDataEntry.id]
+    if not dbTotemData then return end
+
+    if not dbTotemData.enabled then
+        if Gladdy.db.npTotemsHideDisabledTotems then
+            if nameplate.gladdyTotemFrame then
+                nameplate.gladdyTotemFrame:Hide()
+                nameplate.gladdyTotemFrame:SetParent(nil)
+                tinsert(self.totemPlateCache, nameplate.gladdyTotemFrame)
+                nameplate.gladdyTotemFrame = nil
+            end
+            self:ToggleAddon(nameplate, false)
+        else
+            self:ToggleAddon(nameplate, true)
+        end
+        return
+    end
+
+    -- Create or reuse totem frame
+    if #self.totemPlateCache > 0 then
+        nameplate.gladdyTotemFrame = tremove(self.totemPlateCache, #self.totemPlateCache)
+    else
+        self:CreateTotemFrame(nameplate)
+    end
+
+    -- We don't have a unitID in 3.3.5a nameplate scanning, so we use the nameplate itself as key
+    -- and cannot reliably check UnitIsEnemy. Default to enemy styling.
+    local isEnemy = true
+    if not Gladdy.db.npTotemsShowEnemy and isEnemy then
+        self:ToggleAddon(nameplate, true)
+        if nameplate.gladdyTotemFrame then
+            nameplate.gladdyTotemFrame:Hide()
+            nameplate.gladdyTotemFrame:SetParent(nil)
+            tinsert(self.totemPlateCache, nameplate.gladdyTotemFrame)
+            nameplate.gladdyTotemFrame = nil
+        end
+        return
+    end
+
+    if isEnemy then
+        nameplate.gladdyTotemFrame:SetHeight(dbTotemData.enemySize)
+        nameplate.gladdyTotemFrame:SetWidth(dbTotemData.enemySize * Gladdy.db.npTotemPlatesWidthFactor)
+        nameplate.gladdyTotemFrame.totemBorder:SetVertexColor(Gladdy:SetColor(dbTotemData.color))
+    else
+        nameplate.gladdyTotemFrame:SetHeight(dbTotemData.friendlySize)
+        nameplate.gladdyTotemFrame:SetWidth(dbTotemData.friendlySize * Gladdy.db.npTotemPlatesWidthFactor)
+        nameplate.gladdyTotemFrame.totemBorder:SetVertexColor(Gladdy:SetColor(dbTotemData.friendlyColor))
+    end
+    nameplate.gladdyTotemFrame.unitID = nil -- no unitID in 3.3.5a scanning
+    nameplate.gladdyTotemFrame.nameplateName = nameText
+    nameplate.gladdyTotemFrame.totemDataEntry = totemDataEntry
+    nameplate.gladdyTotemFrame.parent = nameplate
+    nameplate.gladdyTotemFrame:SetParent(nameplate)
+    nameplate.gladdyTotemFrame:ClearAllPoints()
+    nameplate.gladdyTotemFrame:SetPoint("CENTER", nameplate, "CENTER", 0, 0)
+    nameplate.gladdyTotemFrame.totemIcon:SetTexture(totemDataEntry.texture)
+    nameplate.gladdyTotemFrame.totemName:SetText(dbTotemData.customText or "")
+    nameplate.gladdyTotemFrame.parent = nameplate
+    nameplate.gladdyTotemFrame:Show()
+
+    -- Alpha: without unitID we can't reliably check target, use default alpha
+    local db = totemDataEntry.npc and totemDataEntry or Gladdy.db.npTotemOptions["totem" .. totemDataEntry.id]
+    if Gladdy.db.npTotemPlatesAlphaAlways then
+        nameplate.gladdyTotemFrame:SetAlpha(db.alpha)
+    else
+        nameplate.gladdyTotemFrame:SetAlpha(0.95)
+    end
+
+    self:ToggleAddon(nameplate, false)
+    self.activeTotemNameplates[nameplate] = nameplate
+end
+
+function TotemPlates:OnNameplateRemoved(nameplate)
+    self.activeTotemNameplates[nameplate] = nil
+    if nameplate.gladdyTotemFrame then
+        nameplate.gladdyTotemFrame:Hide()
+        nameplate.gladdyTotemFrame:SetParent(nil)
+        tinsert(self.totemPlateCache, nameplate.gladdyTotemFrame)
+        nameplate.gladdyTotemFrame = nil
+    end
+    if (self.addon == "ElvUI") then
+        self:ToggleAddon(nameplate, true)
+    end
+end
+
 function TotemPlates:Initialize()
     self.numChildren = 0
     self.activeTotemNameplates = {}
     self.totemPlateCache = {}
     if Gladdy.db.npTotems then
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
         self:SetScript("OnEvent", TotemPlates.OnEvent)
+        self:StartScanner()
     end
-    if Gladdy.db.npTotems and Gladdy.db.npTotemsShowEnemy then
-        SetCVar("nameplateShowEnemyTotems", true);
-    end
-    if Gladdy.db.npTotems and Gladdy.db.npTotemsShowFriendly then
-        SetCVar("nameplateShowFriendlyTotems", true);
-    end
+    -- nameplateShowEnemyTotems / nameplateShowFriendlyTotems CVars do not exist in 3.3.5a
     self.addon = "Blizzard"
     if (IsAddOnLoaded("Plater")) then
         self.addon = "Plater"
@@ -282,29 +464,22 @@ end
 function TotemPlates:PLAYER_ENTERING_WORLD()
     self.numChildren = 0
     self.activeTotemNameplates = {}
+    scannerFrame.knownPlates = {}
 end
 
 function TotemPlates:PLAYER_TARGET_CHANGED()
-    for k,nameplate in pairs(self.activeTotemNameplates) do
-        TotemPlates:SetTotemAlpha(nameplate.gladdyTotemFrame, k)
-    end
-end
-
-function TotemPlates:NAME_PLATE_UNIT_ADDED(unitID)
-    self:OnUnitEvent(unitID)
-end
-
-function TotemPlates:NAME_PLATE_UNIT_REMOVED(unitID)
-    local nameplate = GetNamePlateForUnit(unitID)
-    self.activeTotemNameplates[unitID] = nil
-    if nameplate.gladdyTotemFrame then
-        nameplate.gladdyTotemFrame:Hide()
-        nameplate.gladdyTotemFrame:SetParent(nil)
-        tinsert(self.totemPlateCache, nameplate.gladdyTotemFrame)
-        nameplate.gladdyTotemFrame = nil
-    end
-    if (self.addon == "ElvUI") then
-        self:ToggleAddon(nameplate, true)
+    for _,nameplate in pairs(self.activeTotemNameplates) do
+        if nameplate.gladdyTotemFrame then
+            local totemDataEntry = nameplate.gladdyTotemFrame.totemDataEntry
+            local db = totemDataEntry.npc and totemDataEntry or Gladdy.db.npTotemOptions["totem" .. totemDataEntry.id]
+            -- Without unitID, we can't reliably check UnitIsUnit for target
+            -- Apply default alpha behavior
+            if Gladdy.db.npTotemPlatesAlphaAlways then
+                nameplate.gladdyTotemFrame:SetAlpha(db.alpha)
+            else
+                nameplate.gladdyTotemFrame:SetAlpha(0.95)
+            end
+        end
     end
 end
 
@@ -317,78 +492,64 @@ end
 function TotemPlates:UpdateFrameOnce()
     if Gladdy.db.npTotems then
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
         self:RegisterEvent("PLAYER_TARGET_CHANGED")
         self:SetScript("OnEvent", TotemPlates.OnEvent)
+        self:StartScanner()
     else
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-        self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
         self:UnregisterEvent("PLAYER_TARGET_CHANGED")
         self:SetScript("OnEvent", nil)
+        self:StopScanner()
     end
 
-    if Gladdy.db.npTotems and Gladdy.db.npTotemsShowEnemy then
-        SetCVar("nameplateShowEnemyTotems", true);
-    end
-    if Gladdy.db.npTotems and Gladdy.db.npTotemsShowFriendly then
-        SetCVar("nameplateShowFriendlyTotems", true);
-    end
+    -- nameplateShowEnemyTotems / nameplateShowFriendlyTotems CVars do not exist in 3.3.5a
 
-    for k,nameplate in pairs(self.activeTotemNameplates) do
-        local isEnemy = UnitIsEnemy("player", nameplate.gladdyTotemFrame.unitID)
-
-        local totemDataEntry = nameplate.gladdyTotemFrame.totemDataEntry
-        local dbData = Gladdy.db.npTotemOptions["totem" .. totemDataEntry.id]
-        nameplate.gladdyTotemFrame.totemBorder:SetTexture(Gladdy.db.npTotemPlatesBorderStyle)
-        if isEnemy then
+    for _,nameplate in pairs(self.activeTotemNameplates) do
+        if nameplate.gladdyTotemFrame then
+            local totemDataEntry = nameplate.gladdyTotemFrame.totemDataEntry
+            local dbData = Gladdy.db.npTotemOptions["totem" .. totemDataEntry.id]
+            nameplate.gladdyTotemFrame.totemBorder:SetTexture(Gladdy.db.npTotemPlatesBorderStyle)
+            -- Default to enemy styling (no unitID available)
             nameplate.gladdyTotemFrame:SetHeight(dbData.enemySize)
             nameplate.gladdyTotemFrame:SetWidth(dbData.enemySize * Gladdy.db.npTotemPlatesWidthFactor)
             nameplate.gladdyTotemFrame.totemBorder:SetVertexColor(Gladdy:SetColor(dbData.color))
-        else
-            nameplate.gladdyTotemFrame:SetHeight(dbData.friendlySize)
-            nameplate.gladdyTotemFrame:SetWidth(dbData.friendlySize * Gladdy.db.npTotemPlatesWidthFactor)
-            nameplate.gladdyTotemFrame.totemBorder:SetVertexColor(Gladdy:SetColor(dbData.friendlyColor))
-        end
-        nameplate.gladdyTotemFrame.totemName:SetPoint("TOP", nameplate.gladdyTotemFrame, "BOTTOM", Gladdy.db.npTremorFontXOffset, Gladdy.db.npTremorFontYOffset)
-        nameplate.gladdyTotemFrame.totemName:SetFont(Gladdy:SMFetch("font", "npTremorFont"), Gladdy.db.npTremorFontSize, "OUTLINE")
-        nameplate.gladdyTotemFrame.totemName:SetText(dbData.customText or "")
-        self:SetTotemAlpha(nameplate.gladdyTotemFrame, k)
+            nameplate.gladdyTotemFrame.totemName:SetPoint("TOP", nameplate.gladdyTotemFrame, "BOTTOM", Gladdy.db.npTremorFontXOffset, Gladdy.db.npTremorFontYOffset)
+            nameplate.gladdyTotemFrame.totemName:SetFont(Gladdy:SMFetch("font", "npTremorFont"), Gladdy.db.npTremorFontSize, "OUTLINE")
+            nameplate.gladdyTotemFrame.totemName:SetText(dbData.customText or "")
 
-        if not Gladdy.db.npTotems then
-            nameplate.gladdyTotemFrame:Hide()
-            self:ToggleAddon(nameplate, true)
-        else
-            nameplate.gladdyTotemFrame:Show()
-            self:ToggleAddon(nameplate)
-        end
-        local isEnemy = UnitIsEnemy("player", nameplate.gladdyTotemFrame.unitID)
-        if Gladdy.db.npTotems and Gladdy.db.npTotemsShowEnemy and isEnemy then
-            nameplate.gladdyTotemFrame:Show()
-            self:ToggleAddon(nameplate)
-        elseif Gladdy.db.npTotems and not Gladdy.db.npTotemsShowEnemy and isEnemy then
-            nameplate.gladdyTotemFrame:Hide()
-            self:ToggleAddon(nameplate, true)
-        end
-        if Gladdy.db.npTotems and Gladdy.db.npTotemsShowFriendly and not isEnemy then
-            nameplate.gladdyTotemFrame:Show()
-            self:ToggleAddon(nameplate)
-        elseif not Gladdy.db.npTotemsShowFriendly and not isEnemy then
-            nameplate.gladdyTotemFrame:Hide()
-            self:ToggleAddon(nameplate, true)
-        end
-        if Gladdy.db.npTotems and dbData.enabled then
-            nameplate.gladdyTotemFrame:Show()
-            self:ToggleAddon(nameplate)
-        end
-        if Gladdy.db.npTotems and not dbData.enabled then
-            nameplate.gladdyTotemFrame:Hide()
-            self:ToggleAddon(nameplate, true)
-        end
-        if Gladdy.db.npTotems and not dbData.enabled and Gladdy.db.npTotemsHideDisabledTotems then
-            nameplate.gladdyTotemFrame:Hide()
-            self:ToggleAddon(nameplate)
+            -- Alpha
+            if Gladdy.db.npTotemPlatesAlphaAlways then
+                nameplate.gladdyTotemFrame:SetAlpha(dbData.alpha)
+            else
+                nameplate.gladdyTotemFrame:SetAlpha(0.95)
+            end
+
+            if not Gladdy.db.npTotems then
+                nameplate.gladdyTotemFrame:Hide()
+                self:ToggleAddon(nameplate, true)
+            else
+                nameplate.gladdyTotemFrame:Show()
+                self:ToggleAddon(nameplate)
+            end
+            if Gladdy.db.npTotems and Gladdy.db.npTotemsShowEnemy then
+                nameplate.gladdyTotemFrame:Show()
+                self:ToggleAddon(nameplate)
+            elseif Gladdy.db.npTotems and not Gladdy.db.npTotemsShowEnemy then
+                nameplate.gladdyTotemFrame:Hide()
+                self:ToggleAddon(nameplate, true)
+            end
+            if Gladdy.db.npTotems and dbData.enabled then
+                nameplate.gladdyTotemFrame:Show()
+                self:ToggleAddon(nameplate)
+            end
+            if Gladdy.db.npTotems and not dbData.enabled then
+                nameplate.gladdyTotemFrame:Hide()
+                self:ToggleAddon(nameplate, true)
+            end
+            if Gladdy.db.npTotems and not dbData.enabled and Gladdy.db.npTotemsHideDisabledTotems then
+                nameplate.gladdyTotemFrame:Hide()
+                self:ToggleAddon(nameplate)
+            end
         end
     end
     for _,gladdyTotemFrame in ipairs(self.totemPlateCache) do
@@ -502,7 +663,9 @@ end
 
 function TotemPlates.OnUpdate(self)
     local db = self.totemDataEntry.npc and self.totemDataEntry or Gladdy.db.npTotemOptions["totem" .. self.totemDataEntry.id]
-    if (UnitIsUnit("mouseover", self.unitID) or UnitIsUnit("target", self.unitID)) and db.alpha > 0 then
+    -- In 3.3.5a we may not have a unitID; guard against nil
+    local hasUnit = self.unitID and UnitExists(self.unitID)
+    if hasUnit and (UnitIsUnit("mouseover", self.unitID) or UnitIsUnit("target", self.unitID)) and db.alpha > 0 then
         self.selectionHighlight:SetAlpha(.25)
     else
         self.selectionHighlight:SetAlpha(0)
@@ -514,7 +677,11 @@ end
 
 function TotemPlates:OnUnitEvent(unitID)
     local isEnemy = UnitIsEnemy("player", unitID)
-    local nameplate = GetNamePlateForUnit(unitID)
+    -- 3.3.5a compatible nameplate lookup
+    local nameplate
+    if _NamePlateAPI and _NamePlateAPI.GetNamePlateForUnit then
+        nameplate = _NamePlateAPI.GetNamePlateForUnit(unitID)
+    end
     if not nameplate then
         return
     end
@@ -530,7 +697,19 @@ function TotemPlates:OnUnitEvent(unitID)
         self:ToggleAddon(nameplate, true)
         return
     end
-    local npcType, _, _, _, _, npcId = strsplit("-", UnitGUID(unitID))
+    -- GUID parsing with safety check for both dash-separated and hex-only formats
+    local guid = UnitGUID(unitID)
+    if not guid then return end
+    local npcType, npcId
+    if guid:find("-") then
+        local parts = { strsplit("-", guid) }
+        npcType = parts[1]
+        npcId = parts[6]
+    else
+        -- Fallback: old hex GUID format (0xTTTTIIIIIIIIIIII)
+        -- Type is in bits 48-52, NPC ID in bits 24-47
+        return -- Cannot reliably parse NPC ID from old hex format for totem matching
+    end
     if npcType ~= "Creature" then
         return
     end
@@ -584,6 +763,15 @@ function TotemPlates:SetTotemAlpha(gladdyTotemFrame, unitID)
     local targetExists = UnitExists("target")
     local totemDataEntry = gladdyTotemFrame.totemDataEntry
     local db = totemDataEntry.npc and totemDataEntry or Gladdy.db.npTotemOptions["totem" .. totemDataEntry.id]
+    -- Guard against nil unitID (3.3.5a scanning mode)
+    if not unitID then
+        if Gladdy.db.npTotemPlatesAlphaAlways then
+            gladdyTotemFrame:SetAlpha(db.alpha)
+        else
+            gladdyTotemFrame:SetAlpha(0.95)
+        end
+        return
+    end
     if targetExists then
         if (UnitIsUnit(unitID, "target")) then -- is target
             if Gladdy.db.npTotemPlatesAlphaAlwaysTargeted then

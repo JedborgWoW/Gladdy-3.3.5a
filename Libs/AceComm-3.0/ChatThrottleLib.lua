@@ -394,7 +394,8 @@ end
 
 local function PerformSend(sendFunction, ...)
 	bMyTraffic = true
-	local sendResult = MapToSendResult(xpcall(sendFunction, CallErrorHandler, ...))
+	local args = { ... }
+	local sendResult = MapToSendResult(xpcall(function() return sendFunction(unpack(args)) end, CallErrorHandler))
 	bMyTraffic = false
 	return sendResult
 end
@@ -561,7 +562,7 @@ function ChatThrottleLib:SendChatMessage(prio, prefix,   text, chattype, languag
 
 	-- Check if there's room in the global available bandwidth gauge to send directly
 	if not self.bQueueing and nSize < self:UpdateAvail() then
-		local sendResult = PerformSend(_G.C_ChatInfo.SendChatMessage or _G.SendChatMessage, text, chattype, language, destination)
+		local sendResult = PerformSend((_G.C_ChatInfo and _G.C_ChatInfo.SendChatMessage) or _G.SendChatMessage, text, chattype, language, destination)
 
 		if not IsThrottledSendResult(sendResult) then
 			local didSend = (sendResult == SendAddonMessageResult.Success)
@@ -581,7 +582,7 @@ function ChatThrottleLib:SendChatMessage(prio, prefix,   text, chattype, languag
 
 	-- Message needs to be queued
 	local msg = NewMsg()
-	msg.f = _G.C_ChatInfo.SendChatMessage or _G.SendChatMessage
+	msg.f = (_G.C_ChatInfo and _G.C_ChatInfo.SendChatMessage) or _G.SendChatMessage
 	msg[1] = text
 	msg[2] = chattype or "SAY"
 	msg[3] = language

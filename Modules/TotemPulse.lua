@@ -4,25 +4,47 @@ local Gladdy = LibStub("Gladdy")
 local L = Gladdy.L
 local GetSpellInfo, CreateFrame = GetSpellInfo, CreateFrame
 local GetTime, UnitIsEnemy, UnitGUID = GetTime, UnitIsEnemy, UnitGUID
+local UIParent = UIParent
 
--- 3.3.5a compatible nameplate lookup
-local _NamePlateAPI = rawget(_G, "C_NamePlate")
-local function GetNamePlateForUnit(unitID)
-    if _NamePlateAPI and _NamePlateAPI.GetNamePlateForUnit then
-        return _NamePlateAPI.GetNamePlateForUnit(unitID)
+---------------------------------------------------
+
+-- 3.3.5a Nameplate Helpers
+
+---------------------------------------------------
+
+-- In 3.3.5a, nameplates are WorldFrame children. Each nameplate has regions:
+--   region1 (health bar), region2 (border overlay), region3 (castbar overlay),
+--   region4 (spellicon), region5 (highlight), region6 (nameText FontString)
+-- We identify nameplates by checking for a specific child/region pattern.
+
+local function IsNameplate(frame)
+    local region = select(2, frame:GetRegions())
+    if region and region:GetObjectType() == "Texture" and region:GetTexture() == [[Interface\Tooltips\Nameplate-Border]] then
+        return true
     end
-    local frame = _G["NamePlate" .. unitID]
-    if not frame then
-        for i = 1, WorldFrame:GetNumChildren() do
-            local child = select(i, WorldFrame:GetChildren())
-            if child and child.UnitFrame and child.UnitFrame.unit == unitID then
-                return child
+    -- Alternative check: first child is a StatusBar (health bar)
+    local children = { frame:GetChildren() }
+    if #children >= 1 then
+        local healthBar = children[1]
+        if healthBar and healthBar:GetObjectType() == "StatusBar" then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetNameplateVisibleName(frame)
+    local regions = { frame:GetRegions() }
+    for _, region in pairs(regions) do
+        if region:GetObjectType() == "FontString" then
+            local text = region:GetText()
+            if text and text ~= "" then
+                return text
             end
         end
     end
-    return frame
+    return nil
 end
-local UIParent = UIParent
 
 ---------------------------------------------------
 
@@ -161,12 +183,11 @@ function TotemPulse:Initialize()
     self.cooldownCache = {}
     self.barCache = {}
     self.activeFrames = { bars = {}, cooldowns = {} }
+    self.trackedNameplates = {} -- nameplate frame -> true, for frames we are currently tracking
     if Gladdy.db.totemPulseEnabled then
         self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("UNIT_NAME_UPDATE")
         self:SetScript("OnEvent", self.OnEvent)
+        self:StartNameplateScan()
     end
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
@@ -179,9 +200,10 @@ end
 
 function TotemPulse:PLAYER_ENTERING_WORLD()
     self.timeStamps = {}
+    self.trackedNameplates = {}
 end
 
-function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName)
+function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName)
     local pulse = cooldowns[spellID] or cooldowns[spellName]
     local npcId = tonumber(select(6, strsplit("-", destGUID)), 10)
     if eventType == "UNIT_DESTROYED" and self.timeStamps[destGUID] then
@@ -213,8 +235,7 @@ function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, sourceG
     end
 end
 
-function TotemPulse:NAME_PLATE_UNIT_REMOVED(unitId)
-    local nameplate = GetNamePlateForUnit(unitId)
+function TotemPulse:CleanupNameplate(nameplate)
     if nameplate.totemTick then
         nameplate.totemTick:SetScript("OnUpdate", nil)
         nameplate.totemTick:Hide()
@@ -226,36 +247,94 @@ function TotemPulse:NAME_PLATE_UNIT_REMOVED(unitId)
     end
 end
 
-function TotemPulse:NAME_PLATE_UNIT_ADDED(unitId)
-    self:OnUnitAdded(unitId, "NAME_PLATE_UNIT_ADDED")
+-- Match a visible nameplate name to a totem GUID in timeStamps by checking
+-- npcIdToTotemData for all tracked GUIDs. We match by totem name shown on
+-- the nameplate against known totem names from totemData keys.
+function TotemPulse:FindTimestampForTotemName(name)
+    if not name then
+        return nil, nil
+    end
+    local lowerName = name:lower()
+    for guid, data in pairs(self.timeStamps) do
+        if data.id then
+            -- Check if the nameplate name matches a known totem name
+            local npcId = tonumber(select(6, strsplit("-", guid)), 10)
+            if npcId and npcIdToTotemData[npcId] then
+                -- Get the spell name for this totem to compare
+                local spellName = GetSpellInfo(npcIdToTotemData[npcId].id)
+                if spellName and spellName:lower() == lowerName then
+                    return guid, data
+                end
+            end
+            -- Also try matching against totemData keys directly
+            if totemData[lowerName] and totemData[lowerName].id == data.id then
+                return guid, data
+            end
+        end
+    end
+    return nil, nil
 end
 
-function TotemPulse:UNIT_NAME_UPDATE(unitId)
-    self:OnUnitAdded(unitId, "UNIT_NAME_UPDATE")
-end
-
-function TotemPulse:OnUnitAdded(unitId)
-    local isEnemy = UnitIsEnemy("player", unitId)
-    local guid = UnitGUID(unitId)
-    if strsplit("-", guid) ~= "Creature" then
+function TotemPulse:OnNameplateShow(nameplate)
+    local name = GetNameplateVisibleName(nameplate)
+    if not name then
         return
     end
+    local guid, timestamp = self:FindTimestampForTotemName(name)
+    if timestamp then
+        self:AddTimerFrame(nameplate, timestamp)
+    end
+end
 
-    local nameplate = GetNamePlateForUnit(unitId)
+function TotemPulse:OnNameplateHide(nameplate)
+    self:CleanupNameplate(nameplate)
+    self.trackedNameplates[nameplate] = nil
+end
 
-    if nameplate and (isEnemy and Gladdy.db.totemPulseEnabledShowEnemy or not isEnemy and Gladdy.db.totemPulseEnabledShowFriendly) then
-        if self.timeStamps[guid] and strsplit("-", guid) then
-            self:AddTimerFrame(nameplate, self.timeStamps[guid])
-        else
-            if nameplate.totemTick then
-                nameplate.totemTick:SetScript("OnUpdate", nil)
-                nameplate.totemTick:Hide()
-                nameplate.totemTick:SetParent(nil)
-                tinsert(nameplate.totemTick.bar and self.barCache or self.cooldownCache, nameplate.totemTick)
-                self.activeFrames.bars[nameplate.totemTick] = nil
-                self.activeFrames.cooldowns[nameplate.totemTick] = nil
-                nameplate.totemTick = nil
+-- Scan WorldFrame children periodically to detect nameplate appearance/disappearance
+local NAMEPLATE_SCAN_INTERVAL = 0.2
+function TotemPulse:StartNameplateScan()
+    if self.scanFrame then
+        self.scanFrame:SetScript("OnUpdate", nil)
+    else
+        self.scanFrame = CreateFrame("Frame")
+    end
+    self.scanFrame.elapsed = 0
+    self.scanFrame:SetScript("OnUpdate", function(frame, elapsed)
+        frame.elapsed = frame.elapsed + elapsed
+        if frame.elapsed < NAMEPLATE_SCAN_INTERVAL then
+            return
+        end
+        frame.elapsed = 0
+        TotemPulse:ScanNameplates()
+    end)
+end
+
+function TotemPulse:StopNameplateScan()
+    if self.scanFrame then
+        self.scanFrame:SetScript("OnUpdate", nil)
+    end
+end
+
+function TotemPulse:ScanNameplates()
+    local numChildren = WorldFrame:GetNumChildren()
+    -- Build a set of currently visible nameplates
+    local currentNameplates = {}
+    for i = 1, numChildren do
+        local child = select(i, WorldFrame:GetChildren())
+        if child and child:IsShown() and IsNameplate(child) then
+            currentNameplates[child] = true
+            if not self.trackedNameplates[child] then
+                -- Newly appeared nameplate
+                self.trackedNameplates[child] = true
+                self:OnNameplateShow(child)
             end
+        end
+    end
+    -- Check for nameplates that disappeared
+    for nameplate in pairs(self.trackedNameplates) do
+        if not currentNameplates[nameplate] then
+            self:OnNameplateHide(nameplate)
         end
     end
 end
@@ -516,10 +595,8 @@ function TotemPulse:UpdateFrameOnce()
     end
     if Gladdy.db.totemPulseEnabled then
         self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("UNIT_NAME_UPDATE")
         self:SetScript("OnEvent", self.OnEvent)
+        self:StartNameplateScan()
     else
         for _,bar in pairs(self.activeFrames.bars) do
             bar:SetScript("OnUpdate", nil)
@@ -536,10 +613,13 @@ function TotemPulse:UpdateFrameOnce()
             self.activeFrames.cooldowns[cooldown] = nil
         end
         self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
-        self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:UnregisterEvent("UNIT_NAME_UPDATE")
         self:SetScript("OnEvent", nil)
+        self:StopNameplateScan()
+        -- Clean up any tracked nameplates
+        for nameplate in pairs(self.trackedNameplates) do
+            self:CleanupNameplate(nameplate)
+        end
+        self.trackedNameplates = {}
     end
     for _,bar in pairs(self.activeFrames.bars) do
         self:UpdateBar(bar)

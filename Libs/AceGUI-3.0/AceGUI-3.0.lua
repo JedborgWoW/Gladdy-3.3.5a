@@ -63,7 +63,8 @@ end
 
 local function safecall(func, ...)
 	if func then
-		return xpcall(func, errorhandler, ...)
+		local args = { ... }
+		return xpcall(function() return func(unpack(args)) end, errorhandler)
 	end
 end
 

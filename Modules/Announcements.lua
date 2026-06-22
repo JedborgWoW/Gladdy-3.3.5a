@@ -8,9 +8,8 @@ local SendChatMessage = SendChatMessage
 local RaidNotice_AddMessage = RaidNotice_AddMessage
 local RaidBossEmoteFrame = RaidBossEmoteFrame
 local IsAddOnLoaded = IsAddOnLoaded
-local IsInGroup = IsInGroup
-local LE_PARTY_CATEGORY_HOME = LE_PARTY_CATEGORY_HOME
-local LE_PARTY_CATEGORY_INSTANCE = LE_PARTY_CATEGORY_INSTANCE
+local GetNumPartyMembers = GetNumPartyMembers
+local GetNumRaidMembers = GetNumRaidMembers
 local UnitName = UnitName
 local function GetSchoolString(schoolMask)
     local schools = {
@@ -211,10 +210,8 @@ function Announcements:Send(msg, throttle, color, unit)
 
     if (dest == "self") then
         Gladdy:Print(msg)
-    elseif (dest == "party" and IsInGroup(LE_PARTY_CATEGORY_HOME)) then --(GetNumSubgroupMembers() > 0 or GetNumGroupMembers() > 0)) then
+    elseif (dest == "party" and (GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0)) then
         SendChatMessage(msg, "PARTY")
-    elseif dest == "party" and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
-        SendChatMessage(msg, "INSTANCE_CHAT")
     elseif (dest == "rw") then
         RaidNotice_AddMessage(RaidBossEmoteFrame, msg, color)
     elseif (dest == "fct" and IsAddOnLoaded("Blizzard_CombatText")) then

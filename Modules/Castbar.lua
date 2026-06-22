@@ -336,7 +336,7 @@ end
 
 Castbar.CastEventsFunc = {}
 Castbar.CastEventsFunc["UNIT_SPELLCAST_START"] = function(castBar, event, ...)
-    local name, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible, spellId = UnitCastingInfo(castBar.unit)
+    local name, rank, text, texture, startTime, endTime, isTradeSkill, castID, notInterruptible = UnitCastingInfo(castBar.unit)
     if ( not name or (not castBar.showTradeSkills and isTradeSkill)) then
         castBar:SetAlpha(0)
         return
@@ -413,7 +413,7 @@ end
 Castbar.CastEventsFunc["UNIT_SPELLCAST_INTERRUPTED"] = Castbar.CastEventsFunc["UNIT_SPELLCAST_FAILED"]
 Castbar.CastEventsFunc["UNIT_SPELLCAST_DELAYED"] = function(castBar, event, ...)
     if ( castBar:IsShown() ) then
-        local name, text, texture, startTime, endTime, isTradeSkill, castID = UnitCastingInfo(castBar.unit)
+        local name, rank, text, texture, startTime, endTime, isTradeSkill, castID = UnitCastingInfo(castBar.unit)
 
         if ( not name or (not castBar.showTradeSkills and isTradeSkill)) then
             -- if there is no name, there is no bar
@@ -432,7 +432,7 @@ Castbar.CastEventsFunc["UNIT_SPELLCAST_DELAYED"] = function(castBar, event, ...)
     end
 end
 Castbar.CastEventsFunc["UNIT_SPELLCAST_CHANNEL_START"] = function(castBar, event, ...)
-    local name, text, texture, startTime, endTime, isTradeSkill, notInterruptible, spellId = UnitChannelInfo(castBar.unit)
+    local name, rank, text, texture, startTime, endTime, isTradeSkill, notInterruptible = UnitChannelInfo(castBar.unit)
 
     if ( not name or (not castBar.showTradeSkills and isTradeSkill)) then
         castBar:SetAlpha(0)
@@ -451,7 +451,7 @@ Castbar.CastEventsFunc["UNIT_SPELLCAST_CHANNEL_START"] = function(castBar, event
 end
 Castbar.CastEventsFunc["UNIT_SPELLCAST_CHANNEL_UPDATE"] = function(castBar, event, ...)
     if ( castBar:IsShown() ) then
-        local name, text, texture, startTime, endTime, isTradeSkill, nonInterruptable = UnitChannelInfo(castBar.unit)
+        local name, rank, text, texture, startTime, endTime, isTradeSkill, nonInterruptable = UnitChannelInfo(castBar.unit)
         if ( not name or (not castBar.showTradeSkills and isTradeSkill)) then
             castBar:SetAlpha(0)
             return

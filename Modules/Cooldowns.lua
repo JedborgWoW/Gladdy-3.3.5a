@@ -1695,22 +1695,30 @@ function Cooldowns:GetOptions()
 end
 
 local function getName(spellID, cooldown, class, onlyspec)
+    local function ColorCode(text, color)
+        local r = math.floor((color.r or 0) * 255)
+        local g = math.floor((color.g or 0) * 255)
+        local b = math.floor((color.b or 0) * 255)
+        return string.format("|cff%02x%02x%02x%s|r", r, g, b, text)
+    end
     local spec = ""
     if type(cooldown) == "table" and cooldown.spec then
         if type(cooldown.spec) == "table" then
             spec = " - ("
             for _,specialization in ipairs(cooldown.spec) do
-                local coloredSpec = Gladdy:GetSpecColors()[class][specialization].color:WrapTextInColorCode(specialization)
+                local c = Gladdy:GetSpecColors()[class][specialization].color
+                local coloredSpec = ColorCode(specialization, c)
                 spec = spec .. CreateTextureMarkup(Gladdy:GetSpecIcons()[class][specialization], 64, 64, 16, 16, 0, 1, 0, 1) .. " " .. coloredSpec .. ", "
             end
             spec = spec:sub(1, -3) .. ")"
         else
-            local coloredSpec = Gladdy:GetSpecColors()[class][cooldown.spec].color:WrapTextInColorCode(cooldown.spec)
+            local c = Gladdy:GetSpecColors()[class][cooldown.spec].color
+            local coloredSpec = ColorCode(cooldown.spec, c)
             spec = " - " .. CreateTextureMarkup(Gladdy:GetSpecIcons()[class][cooldown.spec], 64, 64, 16, 16, 0, 1, 0, 1) .. " " .. coloredSpec
         end
     end
     if type(cooldown) == "table" and cooldown.talent then
-        spec = spec .. " - " .. WrapTextInColorCode("Talent " .. (cooldown.talent + 1), "FF8e9e9e")--9c5b00
+        spec = spec .. " - " .. string.format("|cff8e9e9eTalent %d|r", cooldown.talent + 1)
     end
     return (onlyspec and spec) or (CreateTextureMarkup(GetSpellTexture(spellID), 64, 64, 24, 24, 0, 1, 0, 1) .. " " .. select(1, GetSpellInfo(spellID)) .. spec)
 end

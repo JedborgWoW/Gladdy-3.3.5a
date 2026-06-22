@@ -126,7 +126,7 @@ function EventListener:CooldownCheck(eventType, srcUnit, spellName, spellID)
     end
 end
 
-function EventListener:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool)
+function EventListener:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool)
     local srcUnit = Gladdy.guids[sourceGUID] -- can be a PET
     local destUnit = Gladdy.guids[destGUID] -- can be a PET
     if (Gladdy.db.shadowsightTimerEnabled and (eventType == "SPELL_AURA_APPLIED" or eventType == "SPELL_AURA_REFRESH") and spellID == 34709) then
@@ -173,7 +173,7 @@ function EventListener:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, sour
             if eventType == "SPELL_INTERRUPT" then
                 Gladdy:SendMessage("SPELL_INTERRUPT", destUnit,spellID,spellName,spellSchool,extraSpellId,extraSpellName,extraSpellSchool)
             elseif (eventType == "SPELL_CAST_SUCCESS" and Gladdy:GetInterruptsCanonical()[spellID]) then
-                local spellNameChanneled, _, _, _, _, _, interruptable = UnitChannelInfo(destUnit)
+                local spellNameChanneled, _, _, _, _, _, _, interruptable = UnitChannelInfo(destUnit)
                 local spellIdChanneled = spellNameChanneled and Gladdy:GetSpellIdByName(spellNameChanneled)
                 if interruptable == false and spellNameChanneled then
                     if Gladdy.buttons[destUnit].lastCastSpell and Gladdy.buttons[destUnit].lastCastSpell.spellName == spellNameChanneled then

@@ -324,7 +324,7 @@ function Gladdy:CreateButton(i)
     --button.texture:SetAllPoints(button)
     --button.texture:SetTexture("Interface\\AddOns\\Gladdy\\Images\\Border_rounded_blp")
 
-    local secure = CreateFrame("Button", "GladdyButton" .. i, button, "SecureActionButtonTemplate, SecureHandlerEnterLeaveTemplate")
+    local secure = CreateFrame("Button", "GladdyButton" .. i, button, "SecureActionButtonTemplate")
     secure.unit = "arena" .. i
     secure:HookScript("OnEnter", function(self)
         if (Gladdy.db.highlight) then
@@ -356,41 +356,34 @@ function Gladdy:CreateButton(i)
 
     secure.testModeBorder = testModeBorder
 
-    -- Activation animation group (Alpha)
-    secure.ActivationAnimation = testModeBorder:CreateAnimationGroup()
-    secure.ActivationAnimation:SetToFinalAlpha(true)
-    secure.ActivationAnimation:SetScript("OnPlay", function(self)
-        secure.testModeBorder:SetAlpha(1)
-        secure.testModeBorder:Show()
-    end)
-    secure.ActivationAnimation:SetScript("OnFinished", function(self)
-        secure.testModeBorder:Hide()
-        secure.testModeBorder:SetAlpha(0)
-    end)
+    -- Activation animation (OnUpdate-based for 3.3.5a compatibility)
     do
-        local a1 = secure.ActivationAnimation:CreateAnimation("Alpha")
-        a1:SetTarget(secure.testModeBorder)
-        a1:SetSmoothing("NONE")
-        a1:SetOrder(1)
-        a1:SetFromAlpha(0.8)
-        a1:SetToAlpha(1)
-        a1:SetDuration(0.2)
-
-        local a2 = secure.ActivationAnimation:CreateAnimation("Alpha")
-        a2:SetTarget(secure.testModeBorder)
-        a2:SetSmoothing("NONE")
-        a2:SetOrder(2)
-        a2:SetFromAlpha(1)
-        a2:SetToAlpha(1)
-        a2:SetDuration(0.4)
-
-        local a3 = secure.ActivationAnimation:CreateAnimation("Alpha")
-        a3:SetTarget(secure.testModeBorder)
-        a3:SetSmoothing("NONE")
-        a3:SetOrder(3)
-        a3:SetFromAlpha(1)
-        a3:SetToAlpha(0)
-        a3:SetDuration(0.6)
+        local animFrame = CreateFrame("Frame", nil, testModeBorder)
+        animFrame:Hide()
+        local elapsed = 0
+        local totalDuration = 1.2 -- 0.2 + 0.4 + 0.6
+        animFrame:SetScript("OnUpdate", function(self, dt)
+            elapsed = elapsed + dt
+            if elapsed < 0.2 then
+                testModeBorder:SetAlpha(0.8 + (elapsed / 0.2) * 0.2)
+            elseif elapsed < 0.6 then
+                testModeBorder:SetAlpha(1)
+            elseif elapsed < totalDuration then
+                testModeBorder:SetAlpha(1 - ((elapsed - 0.6) / 0.6))
+            else
+                testModeBorder:SetAlpha(0)
+                testModeBorder:Hide()
+                self:Hide()
+            end
+        end)
+        secure.ActivationAnimation = {
+            Play = function()
+                elapsed = 0
+                testModeBorder:SetAlpha(0.8)
+                testModeBorder:Show()
+                animFrame:Show()
+            end,
+        }
     end
 
     --- FOR TESTING ---

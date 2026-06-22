@@ -42,7 +42,8 @@ end
 
 local function safecall(func, ...)
 	if func then
-		return xpcall(func, errorhandler, ...)
+		local args = { ... }
+		return xpcall(function() return func(unpack(args)) end, errorhandler)
 	end
 end
 
@@ -2010,27 +2011,19 @@ function AceConfigDialog:AddToBlizOptions(appName, name, parent, ...)
 
 		local categoryName = name or appName
 		if parent then
-			local parentID = BlizOptionsIDMap[parent] or parent
-			local category = Settings.GetCategory(parentID)
-			if not category then
-				error(("The parent category '%s' was not found"):format(parent), 2)
-			end
-			local subcategory = Settings.RegisterCanvasLayoutSubcategory(category, group.frame, categoryName)
-			group:SetName(subcategory.ID, parentID)
+			group.frame.parent = parent
+			group.frame.name = categoryName
+			group:SetName(categoryName, parent)
+			InterfaceOptions_AddCategory(group.frame)
 		else
 			if BlizOptionsIDMap[categoryName] then
 				error(("%s has already been added to the Blizzard Options Window with the given name: %s"):format(appName, categoryName), 2)
 			end
 
-			local category = Settings.RegisterCanvasLayoutCategory(group.frame, categoryName)
-			if not (C_SettingsUtil and C_SettingsUtil.OpenSettingsPanel) then
-				-- override the ID so the name can be used in Settings.OpenToCategory
-				-- unfortunately with incoming API changes in 12.0 (and likely classic at some point) this override is no longer possible
-				category.ID = categoryName
-			end
-			group:SetName(category.ID)
-			BlizOptionsIDMap[categoryName] = category.ID
-			Settings.RegisterAddOnCategory(category)
+			group.frame.name = categoryName
+			group:SetName(categoryName)
+			BlizOptionsIDMap[categoryName] = categoryName
+			InterfaceOptions_AddCategory(group.frame)
 		end
 
 		return group.frame, group.frame.name
