@@ -148,6 +148,23 @@ if not frameMeta.SetFixedFrameLevel then frameMeta.SetFixedFrameLevel = noop end
 --     clipped to the frame bounds, which is purely cosmetic for the export box.
 if not frameMeta.SetClipsChildren then frameMeta.SetClipsChildren = noop end
 
+-- (D) Texture inheritance templates added after 3.3.5a. The Healthbar absorb bar
+--     does frame:CreateTexture(nil, layer, "TotalAbsorbBarTemplate"/...) and
+--     CreateTexture errors when asked to inherit from a template that doesn't
+--     exist, aborting the whole button creation. Wrap CreateTexture to retry
+--     without the template (and drop the post-3.3.5a subLevel arg). The resulting
+--     plain texture is harmless: absorbs don't exist on 3.3.5a, so the bar is
+--     never populated (UNIT_ABSORB_AMOUNT_CHANGED never fires) and stays hidden.
+local origCreateTexture = frameMeta.CreateTexture
+frameMeta.CreateTexture = function(self, name, layer, template, subLevel)
+    if type(template) == "string" then
+        local ok, tex = pcall(origCreateTexture, self, name, layer, template)
+        if ok and tex then return tex end
+        return origCreateTexture(self, name, layer)
+    end
+    return origCreateTexture(self, name, layer)
+end
+
 -- (H) Cooldown:SetHideCountdownNumbers (Legion) is called unguarded by every
 --     icon module. No-op it - 3.3.5a cooldowns never draw built-in numbers.
 if not cooldownMeta.SetHideCountdownNumbers then cooldownMeta.SetHideCountdownNumbers = noop end
