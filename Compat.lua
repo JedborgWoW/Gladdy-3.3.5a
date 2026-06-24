@@ -184,20 +184,38 @@ if not textureMeta.SetMaskTexture then textureMeta.SetMaskTexture = noop end
 if not textureMeta.SetIgnoreParentAlpha then textureMeta.SetIgnoreParentAlpha = noop end
 
 -- (H) AnimationGroup / Animation methods added after 3.3.5a, used by the
---     Cooldowns activation/flash glow. 3.3.5a has CreateAnimationGroup + Alpha
---     animations but lacks SetToFinalAlpha (4.0), and the per-animation
---     SetTarget (Legion) and SetFromAlpha/SetToAlpha (4.0; 3.3.5a uses SetChange).
---     No-op them: the glow still shows/hides via the group's OnPlay/OnFinished
---     scripts over its total duration, just without the smooth alpha fade.
-local sampleAnimGroup = sampleFrame:CreateAnimationGroup()
-local animGroupMeta = getmetatable(sampleAnimGroup).__index
-if not animGroupMeta.SetToFinalAlpha then animGroupMeta.SetToFinalAlpha = noop end
-
-local sampleAnim = sampleAnimGroup:CreateAnimation("Alpha")
-local animMeta = getmetatable(sampleAnim).__index
-if not animMeta.SetTarget then animMeta.SetTarget = noop end
-if not animMeta.SetFromAlpha then animMeta.SetFromAlpha = noop end
-if not animMeta.SetToAlpha then animMeta.SetToAlpha = noop end
+--     Cooldowns activation/flash glow: SetToFinalAlpha (4.0) on the group, and
+--     SetTarget (Legion) + SetFromAlpha/SetToAlpha (4.0; 3.3.5a uses SetChange)
+--     on the Alpha animations. Unlike Frame/Texture, the AnimationGroup/Animation
+--     metatables are NOT reliably shared/writable on 3.3.5a (which is why
+--     LibCustomGlow bypasses the animation API entirely), so patching their
+--     metatable wouldn't reach the groups Cooldowns creates. Instead wrap
+--     frameMeta.CreateAnimationGroup (which IS shared) and inject the missing
+--     methods directly onto each group + animation instance. No-op is fine: the
+--     glow still shows/hides via the group's OnPlay/OnFinished scripts over its
+--     total duration, just without the smooth alpha fade.
+local origCreateAnimationGroup = frameMeta.CreateAnimationGroup
+if origCreateAnimationGroup then
+    frameMeta.CreateAnimationGroup = function(self, ...)
+        local group = origCreateAnimationGroup(self, ...)
+        if group then
+            if not group.SetToFinalAlpha then group.SetToFinalAlpha = noop end
+            local origCreateAnimation = group.CreateAnimation
+            if origCreateAnimation then
+                group.CreateAnimation = function(g, ...)
+                    local anim = origCreateAnimation(g, ...)
+                    if anim then
+                        if not anim.SetTarget then anim.SetTarget = noop end
+                        if not anim.SetFromAlpha then anim.SetFromAlpha = noop end
+                        if not anim.SetToAlpha then anim.SetToAlpha = noop end
+                    end
+                    return anim
+                end
+            end
+        end
+        return group
+    end
+end
 
 -- (G) Texture:SetColorTexture (Legion). On 3.3.5a SetTexture(r,g,b,a) already
 --     sets a solid colour, so forward to it.
