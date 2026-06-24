@@ -181,6 +181,18 @@ function Healthbar.OnEvent(self, event, unit)
             Gladdy:SendMessage("UNIT_DEATH", unit)
             return
         end
+        -- 3.3.5a: SpotEnemy sets the name from UnitName at detection time, but the enemy
+        -- is usually spotted via the combat log BEFORE UnitName resolves, so it stays
+        -- "Unknown". The dedicated UNIT_NAME_UPDATE branch below is dead code (this if
+        -- already matches that event), so refresh the name here whenever it's still
+        -- unknown and UnitName now has it.
+        local nameButton = Gladdy.buttons[unit]
+        if nameButton and (not nameButton.name or nameButton.name == UNKNOWN or nameButton.name == "Unknown") then
+            local resolvedName = UnitName(unit)
+            if resolvedName and resolvedName ~= UNKNOWN and resolvedName ~= "Unknown" then
+                nameButton.name = resolvedName
+            end
+        end
         local health = UnitHealth(unit)
         local healthMax = UnitHealthMax(unit)
         self.hp:SetMinMaxValues(0, healthMax)
