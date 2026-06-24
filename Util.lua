@@ -346,7 +346,7 @@ function Gladdy:GetSpellDescription(spellID, cooldown)
     local spellName = GetSpellInfo(spellID)
     str = str .. Gladdy:SetTextColor(spellName or "", {r = 1, g=0.82, b=0})
     str = str .. "\n\n" .. Gladdy:SetTextColor("spell ids", {r = 0, g=0.82, b=0}) .. "\n"
-    if cooldown and cooldown.spellIDs then
+    if type(cooldown) == "table" and cooldown.spellIDs then
         for i,rankedSpellID in ipairs(cooldown.spellIDs) do
             local sep = i == 1 and "" or "\n"
             str = str .. sep .. Gladdy:SetTextColor(rankedSpellID, {r = 0, g=0.82, b=0})
