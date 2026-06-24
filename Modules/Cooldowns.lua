@@ -299,6 +299,15 @@ function Cooldowns:CreateIcon()
             a3:SetDuration(0.6)
         end
 
+        -- 3.3.5a: these Alpha groups have no working Animation:SetTarget, so the
+        -- animation drives the GROUP'S PARENT (the icon frame) instead of the glow
+        -- texture, fading the whole icon to alpha 0 (cooldown icons vanish on use).
+        -- The glow is purely cosmetic; neutralise playback so the icon stays fully
+        -- visible. (No-op is harmless where SetTarget works too - just no flash.)
+        icon.ActivationAnimation.Play = function() end
+        icon.FlashAnimation.Play = function() end
+        icon:SetAlpha(1)
+
         self:UpdateIcon(icon)
     end
     return icon
