@@ -153,6 +153,10 @@ if not frameMeta.SetClipsChildren then frameMeta.SetClipsChildren = noop end
 --     3.3.5a: the overlay just inherits the nameplate's alpha (cosmetic only).
 if not frameMeta.SetIgnoreParentAlpha then frameMeta.SetIgnoreParentAlpha = noop end
 
+-- (H) Frame:SetIgnoreParentScale (BfA) - TotemPlates uses it on its test frame.
+--     No-op on 3.3.5a: the frame just inherits the parent's scale (cosmetic).
+if not frameMeta.SetIgnoreParentScale then frameMeta.SetIgnoreParentScale = noop end
+
 -- (D) Texture inheritance templates added after 3.3.5a. The Healthbar absorb bar
 --     does frame:CreateTexture(nil, layer, "TotalAbsorbBarTemplate"/...) and
 --     CreateTexture errors when asked to inherit from a template that doesn't
