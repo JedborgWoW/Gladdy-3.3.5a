@@ -139,6 +139,25 @@ do
 end
 
 --==========================================================================
+-- UnitInPhase (Cata) / UnitInRange (Cata): the Range Check module caches and
+-- calls these, but neither exists on 3.3.5a (no phasing; UnitInRange is 4.0+) -
+-- not even with awesome_wotlk - so the nil upvalue errors on every range tick.
+-- Phasing doesn't exist on 3.3.5a, so everyone is in phase (return true);
+-- approximate UnitInRange with CheckInteractDistance (~28yd follow range).
+-- Compat loads first, so RangeCheck's `local UnitInRange = UnitInRange` captures
+-- these.
+--==========================================================================
+if type(_G.UnitInPhase) ~= "function" then
+    function _G.UnitInPhase() return true end
+end
+if type(_G.UnitInRange) ~= "function" then
+    function _G.UnitInRange(unit)
+        if not unit then return false, false end
+        return (CheckInteractDistance(unit, 4) and true or false), true
+    end
+end
+
+--==========================================================================
 -- Metatable method shims. In 3.3.5a every widget type has its own method
 -- table at getmetatable(obj).__index; adding a missing method there makes it
 -- available on every object of that type. Grab one throwaway object per type.

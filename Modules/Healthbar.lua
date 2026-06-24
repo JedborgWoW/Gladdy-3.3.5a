@@ -171,6 +171,10 @@ function Healthbar:UpdateAbsorb(healthBar)
 end
 
 function Healthbar.OnEvent(self, event, unit)
+    -- 3.3.5a: a bundled RegisterUnitEvent shim (e.g. BigDebuffs') may not survive our
+    -- later SetScript("OnEvent"), so the event can fire for every unit. Only handle
+    -- this bar's own unit (also avoids indexing Gladdy.buttons[unit] for raid/party).
+    if unit ~= self.unit then return end
     local isDead = UnitExists(unit) and UnitIsDeadOrGhost(unit) and not Gladdy:isFeignDeath(unit)
     if event == "UNIT_HEALTH_FREQUENT" or event == "UNIT_MAXHEALTH" or  event == "UNIT_NAME_UPDATE" then
         if isDead then

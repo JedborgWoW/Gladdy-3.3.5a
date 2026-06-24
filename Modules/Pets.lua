@@ -263,6 +263,7 @@ function Pets:CreateFrame(unitId)
 end
 
 function Pets.OnEvent(self, event, unit)
+    if unit ~= self.unit then return end -- 3.3.5a: only handle this pet bar's unit (RegisterUnitEvent filter may be bypassed)
     if event == "UNIT_PORTRAIT_UPDATE" then
         SetPortraitTexture(self.portrait, unit)
     end

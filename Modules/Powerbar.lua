@@ -164,6 +164,7 @@ function Powerbar:UpdateFrame(unit)
 end
 
 function Powerbar.OnEvent(powerBar, event, unit)
+    if unit ~= powerBar.unit then return end -- 3.3.5a: only handle this bar's unit (RegisterUnitEvent filter may be bypassed)
     powerBar.energy.powerType = select(1, UnitPowerType(unit))
     powerBar.energy.current, powerBar.energy.max = UnitPower(unit, powerBar.energy.powerType, true), UnitPowerMax(unit, powerBar.energy.powerType, true)
     Powerbar:SetPower(powerBar, unit, powerBar.energy.current, powerBar.energy.max, powerBar.energy.powerType)
