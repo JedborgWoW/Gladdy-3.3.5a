@@ -14,8 +14,10 @@ local L = Gladdy.L
 local CreateTextureMarkup = CreateTextureMarkup or function(file, fileWidth, fileHeight, width, height, left, right, top, bottom, xOffset, yOffset)
     return string.format("|T%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d|t", file, height, width, xOffset or 0, yOffset or 0, fileWidth, fileHeight, left * fileWidth, right * fileWidth, top * fileHeight, bottom * fileHeight)
 end
--- 3.3.5a compat: GetSpellTexture may not exist
-local GetSpellTexture = GetSpellTexture or function(spellID)
+-- 3.3.5a compat: the global GetSpellTexture takes a spellbook slot, not a spellID,
+-- so it returns nil/wrong icons for our spellIDs. Always derive the icon from
+-- GetSpellInfo (correct on stock 3.3.5a and awesome_wotlk alike).
+local GetSpellTexture = function(spellID)
     return select(3, GetSpellInfo(spellID))
 end
 

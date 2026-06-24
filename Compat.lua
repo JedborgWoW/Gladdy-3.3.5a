@@ -118,6 +118,27 @@ if type(_G.RegisterAddonMessagePrefix) ~= "function" then
 end
 
 --==========================================================================
+-- GetSpellInfo: on retail/Classic, GetSpellInfo(nil) (or a non-positive id)
+-- returns nil; on this 3.3.5a core it raises a hard "Invalid spell slot" error
+-- that aborts whatever is running (hit whenever a tonumber(name)->nil id reaches
+-- it from an option/test builder). Wrap it to return nil for nil / <=0 input like
+-- retail, so existence checks (`if GetSpellInfo(x)`) keep working and never error.
+-- Compat.lua loads first, so every later `local GetSpellInfo = GetSpellInfo` in a
+-- module/lib captures this guarded version. This is the root fix for that class.
+--==========================================================================
+do
+    local origGetSpellInfo = _G.GetSpellInfo
+    if type(origGetSpellInfo) == "function" then
+        function _G.GetSpellInfo(spell, ...)
+            if spell == nil or (type(spell) == "number" and spell <= 0) then
+                return nil
+            end
+            return origGetSpellInfo(spell, ...)
+        end
+    end
+end
+
+--==========================================================================
 -- Metatable method shims. In 3.3.5a every widget type has its own method
 -- table at getmetatable(obj).__index; adding a missing method there makes it
 -- available on every object of that type. Grab one throwaway object per type.
@@ -156,6 +177,49 @@ if not frameMeta.SetIgnoreParentAlpha then frameMeta.SetIgnoreParentAlpha = noop
 -- (H) Frame:SetIgnoreParentScale (BfA) - TotemPlates uses it on its test frame.
 --     No-op on 3.3.5a: the frame just inherits the parent's scale (cosmetic).
 if not frameMeta.SetIgnoreParentScale then frameMeta.SetIgnoreParentScale = noop end
+
+-- (J) RegisterUnitEvent (MoP): missing on STOCK 3.3.5a (many private cores -
+--     incl. the one this is tested on - backport it; if present we leave it
+--     alone). Healthbar/Powerbar/Castbar/Pets register per-unit events and their
+--     OnEvent handlers trust the event only fires for that unit. 3.3.5a fires unit
+--     events for ALL units, so map RegisterUnitEvent -> RegisterEvent plus a
+--     per-frame unit filter: take over the frame's OnEvent with a dispatcher and
+--     intercept this frame's SetScript/GetScript("OnEvent") so the module's
+--     handler only runs for a matching unit (unit-less events pass through).
+if not frameMeta.RegisterUnitEvent then
+    local origSetScript = frameMeta.SetScript
+    local origGetScript = frameMeta.GetScript
+    local function unitDispatch(self, event, unit, ...)
+        local filter = self.__gladdyUnitFilter
+        if filter and unit ~= nil and not filter[unit] then return end
+        local handler = self.__gladdyOnEvent
+        if handler then return handler(self, event, unit, ...) end
+    end
+    function frameMeta.RegisterUnitEvent(self, event, unit1, unit2)
+        self.__gladdyUnitFilter = self.__gladdyUnitFilter or {}
+        if unit1 then self.__gladdyUnitFilter[unit1] = true end
+        if unit2 then self.__gladdyUnitFilter[unit2] = true end
+        if not self.__gladdyUnitDispatch then
+            self.__gladdyUnitDispatch = true
+            self.__gladdyOnEvent = origGetScript(self, "OnEvent")
+            origSetScript(self, "OnEvent", unitDispatch)
+            -- per-object intercepts so the module's later SetScript("OnEvent", h)
+            -- feeds the dispatcher instead of replacing it
+            self.SetScript = function(f, script, handler)
+                if script == "OnEvent" then
+                    f.__gladdyOnEvent = handler
+                else
+                    return origSetScript(f, script, handler)
+                end
+            end
+            self.GetScript = function(f, script)
+                if script == "OnEvent" then return f.__gladdyOnEvent end
+                return origGetScript(f, script)
+            end
+        end
+        return self:RegisterEvent(event)
+    end
+end
 
 -- (D) Texture inheritance templates added after 3.3.5a. The Healthbar absorb bar
 --     does frame:CreateTexture(nil, layer, "TotalAbsorbBarTemplate"/...) and
