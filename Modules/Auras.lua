@@ -616,9 +616,16 @@ function Auras:Test(unit)
         end
         if #enabledInterrupts > 0 then
             local extraSpellSchool = spellSchools[rand(1, #spellSchools)]
-            spellid = tonumber(enabledInterrupts[rand(1, #enabledInterrupts)])
-            spellName = select(1, GetSpellInfo(spellid))
-            Gladdy:SendMessage("SPELL_INTERRUPT", unit,spellid, spellName, "physical", 2061, select(1, GetSpellInfo(2061)), extraSpellSchool)
+            -- 3.3.5a: auraListInterrupts is keyed by spell NAME, so tonumber(key) is
+            -- nil and GetSpellInfo(nil) hard-errors "Invalid spell slot". Resolve the
+            -- numeric spellID from the interrupt data instead, and guard nil.
+            local interruptName = enabledInterrupts[rand(1, #enabledInterrupts)]
+            local interruptInfo = Gladdy:GetInterrupts()[interruptName]
+            spellid = (interruptInfo and interruptInfo.spellID) or tonumber(interruptName)
+            if spellid then
+                spellName = select(1, GetSpellInfo(spellid))
+                Gladdy:SendMessage("SPELL_INTERRUPT", unit, spellid, spellName, "physical", 2061, select(1, GetSpellInfo(2061)), extraSpellSchool)
+            end
         end
     end
 end
