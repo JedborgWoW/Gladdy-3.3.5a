@@ -680,7 +680,9 @@ function Cooldowns:UpdateTestCooldowns(unit, showTalents)
     local talents = {}
     for spellID,cooldown in pairs(Gladdy:GetCooldownList()[button.class]) do
         if Gladdy.db.cooldownCooldowns[tostring(spellID)] then
-            if cooldown.talent then
+            -- 3.3.5a: cooldownList entries may be a bare number (cd seconds); only
+            -- tables carry .talent. Guard before indexing to avoid erroring on a number.
+            if type(cooldown) == "table" and cooldown.talent then
                 if not talents[cooldown.talent] and showTalents then
                     self:CooldownUsed(unit, button.class, spellID)
                     talents[cooldown.talent] = true
