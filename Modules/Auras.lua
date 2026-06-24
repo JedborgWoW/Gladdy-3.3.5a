@@ -1401,8 +1401,10 @@ function Auras:GetAuraOptions(auraType)
         local texture = Gladdy.db.auraListDefault[tostring(k)] and Gladdy.db.auraListDefault[tostring(k)].texture or select(3, GetSpellInfo(k))
         options[tostring(k)] = {
             type = "group",
-            name = Gladdy:GetExceptionSpellName(k),
-            desc = Gladdy:GetSpellDescription(k, Gladdy.db.auraListDefault[tostring(k)]), --GetSpellDescription(k),
+            -- 3.3.5a: keys are stringified spellIDs; GetSpellInfo needs a number to
+            -- resolve them (a string is treated as a spell name and returns nil).
+            name = Gladdy:GetExceptionSpellName(tonumber(k) or k),
+            desc = Gladdy:GetSpellDescription(tonumber(k) or k, Gladdy.db.auraListDefault[tostring(k)]), --GetSpellDescription(k),
             order = i+2,
             icon = texture,
             args = {
@@ -1582,18 +1584,23 @@ function Auras:GetInterruptOptions()
         return tostring(a) < tostring(b)
     end)
     for i, spellID in ipairs(auras) do
+        -- 3.3.5a: interrupt keys are spell names; resolve the numeric id from the
+        -- interrupt info so GetSpellInfo/description return valid values (GetSpellInfo
+        -- of a name not in the player's spellbook is nil). DB keys stay name-based.
+        local interrupt = Gladdy:GetInterrupts()[spellID]
+        local sid = (interrupt and interrupt.spellID) or spellID
         options[tostring(spellID)] = {
             type = "group",
-            name = GetSpellInfo(spellID),
-            desc = Gladdy:GetSpellDescription(spellID, Gladdy:GetInterrupts()[spellID]),
+            name = GetSpellInfo(sid),
+            desc = Gladdy:GetSpellDescription(sid, interrupt),
             order = i+2,
-            icon = Gladdy:GetInterrupts()[spellID] and Gladdy:GetInterrupts()[spellID].texture or select(3, GetSpellInfo(spellID)),
+            icon = (interrupt and interrupt.texture) or select(3, GetSpellInfo(sid)),
             args = {
                 enabled = {
                     order = 1,
                     name = L["Enabled"],
                     type = "toggle",
-                    image = Gladdy:GetInterrupts()[spellID] and Gladdy:GetInterrupts()[spellID].texture or select(3, GetSpellInfo(spellID)),
+                    image = (interrupt and interrupt.texture) or select(3, GetSpellInfo(sid)),
                     width = "2",
                     set = function(_, value)
                         Gladdy.db.auraListInterrupts[tostring(spellID)].enabled = value

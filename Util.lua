@@ -292,10 +292,13 @@ function Gladdy:Dump(table, space)
 end
 
 function Gladdy:GetSpellDescription(spellID, cooldown)
-    local castTimeInfo = select(4, GetSpellInfo(spellID))
+    local castTimeInfo = select(4, GetSpellInfo(tonumber(spellID) or spellID))
     local castTime = tonumber(castTimeInfo)
 
-    castTime = (castTime <= 0 and "Instant" or castTime / 1000 .. "s") .. "\n\n"
+    -- 3.3.5a: GetSpellInfo returns nil for an unknown spell id, or for a spell name
+    -- not in the player's spellbook, so castTime can be nil here - guard it instead
+    -- of comparing nil with a number.
+    castTime = (castTime and (castTime <= 0 and "Instant" or castTime / 1000 .. "s") or "") .. "\n\n"
     local str = ""
     if cooldown then
         --[586] = { cd = 30, [L["Shadow"]] = 15, }
