@@ -148,6 +148,11 @@ if not frameMeta.SetFixedFrameLevel then frameMeta.SetFixedFrameLevel = noop end
 --     clipped to the frame bounds, which is purely cosmetic for the export box.
 if not frameMeta.SetClipsChildren then frameMeta.SetClipsChildren = noop end
 
+-- (H) Frame:SetIgnoreParentAlpha (BfA) is called by TotemPlates on the totem
+--     overlay frame so it stays opaque while the nameplate fades. No-op on
+--     3.3.5a: the overlay just inherits the nameplate's alpha (cosmetic only).
+if not frameMeta.SetIgnoreParentAlpha then frameMeta.SetIgnoreParentAlpha = noop end
+
 -- (D) Texture inheritance templates added after 3.3.5a. The Healthbar absorb bar
 --     does frame:CreateTexture(nil, layer, "TotalAbsorbBarTemplate"/...) and
 --     CreateTexture errors when asked to inherit from a template that doesn't
@@ -173,6 +178,10 @@ if not cooldownMeta.SetHideCountdownNumbers then cooldownMeta.SetHideCountdownNu
 --     module for rounded icons. No-op: icons simply stay square on 3.3.5a.
 if not textureMeta.SetMask then textureMeta.SetMask = noop end
 if not textureMeta.SetMaskTexture then textureMeta.SetMaskTexture = noop end
+
+-- (H) Texture:SetIgnoreParentAlpha (BfA) - TotemPlates uses it on the totem
+--     selection-highlight texture. No-op on 3.3.5a (cosmetic, see frame shim).
+if not textureMeta.SetIgnoreParentAlpha then textureMeta.SetIgnoreParentAlpha = noop end
 
 -- (G) Texture:SetColorTexture (Legion). On 3.3.5a SetTexture(r,g,b,a) already
 --     sets a solid colour, so forward to it.
