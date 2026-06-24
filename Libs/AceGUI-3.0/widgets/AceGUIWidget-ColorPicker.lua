@@ -151,7 +151,11 @@ local methods = {
 		self.g = g
 		self.b = b
 		self.a = a or 1
-		self.colorSwatch:SetVertexColor(r, g, b, a)
+		-- 3.3.5a: tinting the ChatFrameColorSwatch graphic via SetVertexColor renders
+		-- the wrong colour on this client, so paint the swatch as a solid colour block
+		-- instead (exact preview; a<1 shows the checkers/white bg behind for alpha).
+		self.colorSwatch:SetVertexColor(1, 1, 1, 1)
+		self.colorSwatch:SetTexture(r, g, b, a or 1)
 	end,
 
 	["SetHasAlpha"] = function(self, HasAlpha)
