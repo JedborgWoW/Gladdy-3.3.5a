@@ -74,6 +74,7 @@ end
 function Targets:JOINED_ARENA()
     if Gladdy.db.targetEnabled then
         self:RegisterEvent("UNIT_HEALTH_FREQUENT")
+        self:RegisterEvent("UNIT_HEALTH") -- 3.3.5a: UNIT_HEALTH_FREQUENT is Cata+; UNIT_HEALTH is the stock event
         self:RegisterEvent("UNIT_MAXHEALTH")
         self:RegisterEvent("UNIT_TARGET")
         self:SetScript("OnEvent", Targets.OnEvent)
@@ -149,7 +150,7 @@ function Targets:OnEvent(event)
                 self:HealthCheck(unit)
                 self:SetHealthText(button.healthBar, health, healthMax)
             end
-            if (event == "UNIT_HEALTH_FREQUENT" and not checkedHealth) then
+            if ((event == "UNIT_HEALTH_FREQUENT" or event == "UNIT_HEALTH") and not checkedHealth) then
                 button.healthBar.hp:SetValue(health)
                 self:HealthCheck(unit)
                 self:SetHealthText(button.healthBar, health, healthMax)
