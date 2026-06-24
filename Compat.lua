@@ -242,9 +242,23 @@ end
 --     icon module. No-op it - 3.3.5a cooldowns never draw built-in numbers.
 if not cooldownMeta.SetHideCountdownNumbers then cooldownMeta.SetHideCountdownNumbers = noop end
 
--- (H) Texture:SetMask / SetMaskTexture (7.0) used unguarded by every icon
---     module for rounded icons. No-op: icons simply stay square on 3.3.5a.
-if not textureMeta.SetMask then textureMeta.SetMask = noop end
+-- (H) Texture:SetMask / SetMaskTexture (7.0): every Gladdy icon module masks its
+--     icon with "Interface\AddOns\Gladdy\Images\mask" for a rounded look. On stock
+--     3.3.5a there is no SetMask, so it must no-op (icons stay square). BUT on a
+--     client that DOES provide a native SetMask (awesome_wotlk), applying Gladdy's
+--     mask renders the icons fully INVISIBLE (the mask's alpha convention doesn't
+--     match this implementation). So intercept only Gladdy's own mask path and
+--     skip it (icons stay square but VISIBLE); any other texture/path is delegated
+--     to the native SetMask so we don't break masking for other addons globally.
+do
+    local origSetMask = textureMeta.SetMask
+    textureMeta.SetMask = function(self, file, ...)
+        if type(file) == "string" and file:find("Gladdy", 1, true) then
+            return -- Gladdy icon mask -> skip so the icon stays visible
+        end
+        if origSetMask then return origSetMask(self, file, ...) end
+    end
+end
 if not textureMeta.SetMaskTexture then textureMeta.SetMaskTexture = noop end
 
 -- (H) Texture:SetIgnoreParentAlpha (BfA) - TotemPlates uses it on the totem
