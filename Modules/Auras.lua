@@ -1392,7 +1392,10 @@ function Auras:GetAuraOptions(auraType)
         end
     end
     tbl_sort(auras, function(a, b)
-        return GetSpellInfo(a) < GetSpellInfo(b)
+        -- 3.3.5a: keys are stringified spellIDs; GetSpellInfo only resolves a numeric
+        -- id (a string is treated as a spell name and returns nil), so coerce first and
+        -- guard nil to avoid "compare string with nil".
+        return (GetSpellInfo(tonumber(a)) or "") < (GetSpellInfo(tonumber(b)) or "")
     end)
     for i,k in ipairs(auras) do
         local texture = Gladdy.db.auraListDefault[tostring(k)] and Gladdy.db.auraListDefault[tostring(k)].texture or select(3, GetSpellInfo(k))
@@ -1572,7 +1575,11 @@ function Auras:GetInterruptOptions()
         tinsert(auras, spellID)
     end
     tbl_sort(auras, function(a, b)
-        return GetSpellInfo(a) < GetSpellInfo(b)
+        -- 3.3.5a: the interrupt table is keyed by spell name, so a/b are already the
+        -- names. GetSpellInfo(name) returns nil for a spell not in the player's
+        -- spellbook, which made the original comparison error ("compare string with
+        -- nil"). Sort by the name keys directly instead.
+        return tostring(a) < tostring(b)
     end)
     for i, spellID in ipairs(auras) do
         options[tostring(spellID)] = {

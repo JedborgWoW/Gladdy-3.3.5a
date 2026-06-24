@@ -1,8 +1,8 @@
 ## Interface: 30300
-## Title: Gladdy - |cFF1ADB04WotLK|r
+## Title: Gladdy-|cFF1ADB043.3.5a|r
 ## Version: 2.72-Release
 ## Notes: The most powerful arena AddOn for WoW Classic
-## Author: XiconQoo, DnB_Junkee, Knall
+## Author: XiconQoo, DnB_Junkee, Knall|nBackport by Jedborg
 ## X-Email: contact me on discord Knall#1751
 ## X-Curse-Project-ID: 482332
 ## X-WoWI-ID: 26350
@@ -11,6 +11,7 @@
 
 Compat.lua
 embeds.xml
+Compat_Libs.lua
 
 Gladdy.lua
 Lang.lua

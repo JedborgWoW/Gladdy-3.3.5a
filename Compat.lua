@@ -77,6 +77,47 @@ if type(_G.securecallfunction) ~= "function" then
 end
 
 --==========================================================================
+-- Enum.SpellBookSpellBank: retail (10.x) enum. LibSpellRange-1.0 picks its
+-- spell-book token at load with
+--     playerBook = GetSpellBookItemName and "spell" or Enum.SpellBookSpellBank.Player
+-- On 3.3.5a GetSpellBookItemName is nil, so it falls through to the enum and
+-- indexing the missing Enum.SpellBookSpellBank.Player aborts the lib at load.
+-- Map the enum onto the classic book-type strings ("spell"/"pet") so the
+-- fallback yields the correct 3.3.5a value instead of erroring.
+--==========================================================================
+_G.Enum = _G.Enum or {}
+if _G.Enum.SpellBookSpellBank == nil then
+    _G.Enum.SpellBookSpellBank = { Player = "spell", Pet = "pet" }
+end
+
+--==========================================================================
+-- Ambiguate(name, context): added in WoD (6.0). AceComm-3.0's CHAT_MSG_ADDON
+-- handler calls Ambiguate(sender, "none") unguarded; without it every received
+-- addon message errors (42x in the report). On retail "none" returns the name
+-- unchanged (realm kept) and "short" strips the realm - reproduce that. 3.3.5a
+-- senders usually carry no realm anyway, so this is a safe no-op for "none".
+--==========================================================================
+if type(_G.Ambiguate) ~= "function" then
+    function _G.Ambiguate(name, context)
+        if type(name) ~= "string" then return name end
+        if context == "short" then
+            return name:match("^([^-]+)") or name
+        end
+        return name
+    end
+end
+
+--==========================================================================
+-- RegisterAddonMessagePrefix: added in 4.1, missing on 3.3.5a (and C_ChatInfo
+-- does not exist either). AceComm:RegisterComm calls it unguarded, so Gladdy's
+-- own VersionCheck would error the first time it registers in an arena. On
+-- 3.3.5a SendAddonMessage needs no prefix registration, so a no-op is correct.
+--==========================================================================
+if type(_G.RegisterAddonMessagePrefix) ~= "function" then
+    function _G.RegisterAddonMessagePrefix() end
+end
+
+--==========================================================================
 -- Metatable method shims. In 3.3.5a every widget type has its own method
 -- table at getmetatable(obj).__index; adding a missing method there makes it
 -- available on every object of that type. Grab one throwaway object per type.
@@ -101,6 +142,11 @@ local function noop() end
 if not frameMeta.SetPropagateKeyboardInput then frameMeta.SetPropagateKeyboardInput = noop end
 if not frameMeta.SetFixedFrameStrata then frameMeta.SetFixedFrameStrata = noop end
 if not frameMeta.SetFixedFrameLevel then frameMeta.SetFixedFrameLevel = noop end
+
+-- (H) Frame:SetClipsChildren (Legion) is called unguarded by ExportImport on the
+--     AceGUI MultiLineEditBox frame. No-op it - on 3.3.5a children just aren't
+--     clipped to the frame bounds, which is purely cosmetic for the export box.
+if not frameMeta.SetClipsChildren then frameMeta.SetClipsChildren = noop end
 
 -- (H) Cooldown:SetHideCountdownNumbers (Legion) is called unguarded by every
 --     icon module. No-op it - 3.3.5a cooldowns never draw built-in numbers.

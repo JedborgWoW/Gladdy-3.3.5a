@@ -37,7 +37,14 @@ local function getDefaultCooldown()
         for spellId,val in pairs(spellTable) do
             local spellName = GetSpellInfo(spellId)
             if spellName then
-                cooldowns[tostring(spellId)] = (val.enabled == nil and true) or val.enabled
+                -- 3.3.5a: cooldownList entries may be a bare number (cd seconds), not a
+                -- table; only tables carry an .enabled flag (cf. the type check in
+                -- Initialize). Indexing a number errors, so guard it - default enabled.
+                if type(val) == "table" then
+                    cooldowns[tostring(spellId)] = (val.enabled == nil and true) or val.enabled
+                else
+                    cooldowns[tostring(spellId)] = true
+                end
                 if type(val) == "table" and val.class then
                     if val.class and not cooldownsOrder[val.class] then
                         cooldownsOrder[val.class] = {}
