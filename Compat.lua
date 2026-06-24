@@ -183,6 +183,22 @@ if not textureMeta.SetMaskTexture then textureMeta.SetMaskTexture = noop end
 --     selection-highlight texture. No-op on 3.3.5a (cosmetic, see frame shim).
 if not textureMeta.SetIgnoreParentAlpha then textureMeta.SetIgnoreParentAlpha = noop end
 
+-- (H) AnimationGroup / Animation methods added after 3.3.5a, used by the
+--     Cooldowns activation/flash glow. 3.3.5a has CreateAnimationGroup + Alpha
+--     animations but lacks SetToFinalAlpha (4.0), and the per-animation
+--     SetTarget (Legion) and SetFromAlpha/SetToAlpha (4.0; 3.3.5a uses SetChange).
+--     No-op them: the glow still shows/hides via the group's OnPlay/OnFinished
+--     scripts over its total duration, just without the smooth alpha fade.
+local sampleAnimGroup = sampleFrame:CreateAnimationGroup()
+local animGroupMeta = getmetatable(sampleAnimGroup).__index
+if not animGroupMeta.SetToFinalAlpha then animGroupMeta.SetToFinalAlpha = noop end
+
+local sampleAnim = sampleAnimGroup:CreateAnimation("Alpha")
+local animMeta = getmetatable(sampleAnim).__index
+if not animMeta.SetTarget then animMeta.SetTarget = noop end
+if not animMeta.SetFromAlpha then animMeta.SetFromAlpha = noop end
+if not animMeta.SetToAlpha then animMeta.SetToAlpha = noop end
+
 -- (G) Texture:SetColorTexture (Legion). On 3.3.5a SetTexture(r,g,b,a) already
 --     sets a solid colour, so forward to it.
 if not textureMeta.SetColorTexture then
