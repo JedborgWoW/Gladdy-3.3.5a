@@ -180,12 +180,29 @@ if not frameMeta.SetIgnoreParentScale then frameMeta.SetIgnoreParentScale = noop
 
 -- (J) RegisterUnitEvent (MoP): missing on STOCK 3.3.5a (many private cores -
 --     incl. the one this is tested on - backport it; if present we leave it
---     alone). Healthbar/Powerbar/Castbar/Pets register per-unit events and their
---     OnEvent handlers trust the event only fires for that unit. 3.3.5a fires unit
---     events for ALL units, so map RegisterUnitEvent -> RegisterEvent plus a
---     per-frame unit filter: take over the frame's OnEvent with a dispatcher and
---     intercept this frame's SetScript/GetScript("OnEvent") so the module's
---     handler only runs for a matching unit (unit-less events pass through).
+--     alone, so this whole block is inert on awesome_wotlk). Healthbar/Powerbar/
+--     Castbar/Pets register per-unit events and their OnEvent handlers trust the
+--     event only fires for that unit. 3.3.5a fires unit events for ALL units, so
+--     map RegisterUnitEvent -> RegisterEvent plus a per-frame unit filter: take
+--     over the frame's OnEvent with a dispatcher and intercept this frame's
+--     SetScript/GetScript("OnEvent") so the module's handler only runs for a
+--     matching unit (unit-less events pass through).
+--
+--     ALSO: several events the modules request are themselves post-3.3.5a renames
+--     (UNIT_HEALTH_FREQUENT = Cata, UNIT_POWER_UPDATE/UNIT_MAXPOWER = Cata/MoP).
+--     On stock they never fire, so the health/power bars would freeze. Register
+--     the genuine 3.3.5a events too and translate them back to the modern name in
+--     dispatch (the handlers either are name-agnostic or branch on the modern
+--     name). This only runs on stock; awesome_wotlk uses its native events.
+local modernToLegacy = {
+    UNIT_HEALTH_FREQUENT = { "UNIT_HEALTH" },
+    UNIT_POWER_UPDATE = { "UNIT_MANA", "UNIT_RAGE", "UNIT_ENERGY", "UNIT_FOCUS", "UNIT_RUNIC_POWER", "UNIT_HAPPINESS" },
+    UNIT_MAXPOWER = { "UNIT_MAXMANA", "UNIT_MAXRAGE", "UNIT_MAXENERGY", "UNIT_MAXFOCUS", "UNIT_MAXRUNIC_POWER", "UNIT_MAXHAPPINESS" },
+}
+local legacyToModern = {}
+for modern, legacies in pairs(modernToLegacy) do
+    for _, leg in ipairs(legacies) do legacyToModern[leg] = modern end
+end
 if not frameMeta.RegisterUnitEvent then
     local origSetScript = frameMeta.SetScript
     local origGetScript = frameMeta.GetScript
@@ -193,7 +210,8 @@ if not frameMeta.RegisterUnitEvent then
         local filter = self.__gladdyUnitFilter
         if filter and unit ~= nil and not filter[unit] then return end
         local handler = self.__gladdyOnEvent
-        if handler then return handler(self, event, unit, ...) end
+        -- translate a 3.3.5a event back to the modern name the handler expects
+        if handler then return handler(self, legacyToModern[event] or event, unit, ...) end
     end
     function frameMeta.RegisterUnitEvent(self, event, unit1, unit2)
         self.__gladdyUnitFilter = self.__gladdyUnitFilter or {}
@@ -217,7 +235,14 @@ if not frameMeta.RegisterUnitEvent then
                 return origGetScript(f, script)
             end
         end
-        return self:RegisterEvent(event)
+        self:RegisterEvent(event)
+        -- also register the genuine 3.3.5a equivalents so the bar updates on stock
+        local legacies = modernToLegacy[event]
+        if legacies then
+            for _, leg in ipairs(legacies) do
+                pcall(self.RegisterEvent, self, leg)
+            end
+        end
     end
 end
 
