@@ -1727,7 +1727,13 @@ local function getName(spellID, cooldown, class, onlyspec)
     if type(cooldown) == "table" and cooldown.talent then
         spec = spec .. " - " .. string.format("|cff8e9e9eTalent %d|r", cooldown.talent + 1)
     end
-    return (onlyspec and spec) or (CreateTextureMarkup(GetSpellTexture(spellID), 64, 64, 24, 24, 0, 1, 0, 1) .. " " .. select(1, GetSpellInfo(spellID)) .. spec)
+    -- 3.3.5a: some cooldownList ids don't exist on this client, so GetSpellTexture and
+    -- GetSpellInfo return nil. Guard the icon markup and name so format()/concat don't
+    -- error (a missing spell just shows its id with no icon).
+    local texture = GetSpellTexture(spellID)
+    local iconMarkup = texture and (CreateTextureMarkup(texture, 64, 64, 24, 24, 0, 1, 0, 1) .. " ") or ""
+    local spellName = select(1, GetSpellInfo(spellID)) or tostring(spellID)
+    return (onlyspec and spec) or (iconMarkup .. spellName .. spec)
 end
 
 local function UpdateSpellOrder(class, spellId, newOrder)
