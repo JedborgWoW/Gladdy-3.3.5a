@@ -581,6 +581,12 @@ end
 
 function Castbar:ResetUnit(unit)
     local castBar = self.frames[unit]
+    -- ResetUnit can be called for a unit whose cast bar was never created (module
+    -- disabled, or a live options toggle that resets before frames are rebuilt), so
+    -- guard the nil frame like BuffsDebuffs:ResetUnit does rather than indexing it.
+    if not castBar then
+        return
+    end
     castBar:UnregisterAllEvents()
     castBar:SetScript("OnEvent", nil)
     castBar:SetScript("OnUpdate", nil)

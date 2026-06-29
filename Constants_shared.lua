@@ -11,7 +11,11 @@ tbl_sort(Gladdy.RACES)
 local classIconPath = "Interface\\Addons\\Gladdy\\Images\\Classes\\"
 local classIcons = {
     ["DRUID"] = classIconPath .. "inv_misc_monsterclaw_04",
-    ["DEATHKNIGHT"] = select(3, GetSpellInfo(72360)), --Obliterate
+    -- No bundled Death Knight icon BLP; derive it from a core 3.3.5a DK ability.
+    -- (72360 is a Wrath-Classic-era id, NOT the 3.3.5a Obliterate, so it resolved to
+    -- nil here and left DKs with a blank class icon.) Obliterate r1 = 49020; fall back
+    -- to Death Grip (49576, used in classRangeSpells/cooldownList so it always resolves).
+    ["DEATHKNIGHT"] = select(3, GetSpellInfo(49020)) or select(3, GetSpellInfo(49576)),
     ["HUNTER"] = classIconPath .. "inv_weapon_bow_07",
     ["MAGE"] = classIconPath .. "inv_staff_13",
     ["PALADIN"] = classIconPath .. "inv_hammer_01",
@@ -20,7 +24,6 @@ local classIcons = {
     ["SHAMAN"] = classIconPath .. "inv_jewelry_talisman_04",
     ["WARLOCK"] = classIconPath .. "spell_nature_drowsy",
     ["WARRIOR"] = classIconPath .. "inv_sword_27",
-    ["MONK"] = 626002,-- classicon-monk
 }
 Gladdy.classIcons = classIcons
 
@@ -45,11 +48,6 @@ local specIcons = {
         [L["Arcane"]] = 135932, -- Arcane Intellect
         [L["Fire"]] = 135812, -- Fireball
         [L["Frost"]] = 135846, -- Frostbolt
-    },
-    ["MONK"] = {
-        [L["Brewmaster"]] = 608951,
-        [L["Mistweaver"]] = 608952,
-        [L["Windwalker"]] = 608953,
     },
     ["PALADIN"] = {
         [L["Holy"]] = 135920, -- Holy Light
@@ -108,11 +106,6 @@ local specColors = {
         [L["Fire"]] = { r = 0.894, g = 0.580, b = 0.424, hex = "e4946c", color = {r=0.894, g=0.580, b=0.424, a=1} },
         [L["Frost"]] = { r = 0.322, g = 0.322, b = 0.620, hex = "52529e", color = {r=0.322, g=0.322, b=0.620, a=1} },
     },
-    ["MONK"] = {
-        [L["Brewmaster"]] = { r = 0.678, g = 0.376, b = 0.075, hex = "ad6013", color = {r=0.678, g=0.376, b=0.075, a=1} },
-        [L["Mistweaver"]] = { r = 0.020, g = 0.922, b = 0.322, hex = "05eb52", color = {r=0.020, g=0.922, b=0.322, a=1} },
-        [L["Windwalker"]] = { r = 0.322, g = 0.620, b = 0.620, hex = "529e9e", color = {r=0.322, g=0.620, b=0.620, a=1} },
-    },
     ["PALADIN"] = {
         [L["Holy"]] = { r = 1.000, g = 0.941, b = 0.882, hex = "fff0e1", color = {r=1.000, g=0.941, b=0.882, a=1} },
         [L["Protection"]] = { r = 0.796, g = 0.796, b = 0.333, hex = "cbcb55", color = {r=0.796, g=0.796, b=0.333, a=1} },
@@ -159,7 +152,6 @@ local classRangeSpells = {
     ["HUNTER"] = { spellID = 1978, melee = true, range = true },
     ["ROGUE"] = { spellID = 36554, melee = true, range = false },
     ["DEATHKNIGHT"] = { spellID = 49576, melee = true, range = false },
-    ["MONK"] = { spellID = 117952, melee = true, range = false },
 }
 Gladdy.classRangeSpells = classRangeSpells
 

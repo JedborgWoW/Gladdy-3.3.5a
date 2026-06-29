@@ -242,26 +242,35 @@ function Gladdy:UpdateFrame()
     elseif Gladdy.db.hideBlizzard == "never" then
         Gladdy:BlizzArenaSetAlpha(1)
     end
+    -- Legacy -> new-layout one-time migration: measures the arena1<->arena2 gap to seed
+    -- bottomMargin. It needs BOTH buttons to exist; during a single-frame test or before
+    -- the second button is built, self.buttons["arena2"] is nil and indexing .secure
+    -- crashed here. Only migrate (and only then flip newLayout) when both buttons exist,
+    -- so an old profile defers the migration instead of erroring and half-finishing it.
     if (not Gladdy.db.newLayout) then
-        Gladdy.db.newLayout = true
-        --get margin
-        local arena1Bottom
-        local arena2Top
-        if (self.db.growDirection == "BOTTOM") then
-            arena1Bottom = self.buttons["arena1"].secure:GetBottom()
-            arena2Top = self.buttons["arena2"].secure:GetTop()
-        elseif (self.db.growDirection == "TOP") then
-            arena1Bottom = self.buttons["arena1"].secure:GetTop()
-            arena2Top = self.buttons["arena2"].secure:GetBottom()
-        elseif (self.db.growDirection == "LEFT") then
-            arena1Bottom = self.buttons["arena1"].secure:GetLeft()
-            arena2Top = self.buttons["arena2"].secure:GetRight()
-        elseif (self.db.growDirection == "RIGHT") then
-            arena1Bottom = self.buttons["arena1"].secure:GetRight()
-            arena2Top = self.buttons["arena2"].secure:GetLeft()
+        local b1 = self.buttons["arena1"]
+        local b2 = self.buttons["arena2"]
+        if (b1 and b1.secure and b2 and b2.secure) then
+            Gladdy.db.newLayout = true
+            --get margin
+            local arena1Bottom
+            local arena2Top
+            if (self.db.growDirection == "BOTTOM") then
+                arena1Bottom = b1.secure:GetBottom()
+                arena2Top = b2.secure:GetTop()
+            elseif (self.db.growDirection == "TOP") then
+                arena1Bottom = b1.secure:GetTop()
+                arena2Top = b2.secure:GetBottom()
+            elseif (self.db.growDirection == "LEFT") then
+                arena1Bottom = b1.secure:GetLeft()
+                arena2Top = b2.secure:GetRight()
+            elseif (self.db.growDirection == "RIGHT") then
+                arena1Bottom = b1.secure:GetRight()
+                arena2Top = b2.secure:GetLeft()
+            end
+            Gladdy.db.bottomMargin = math_abs(arena1Bottom - arena2Top)
+            Gladdy:UpdateFrame()
         end
-        Gladdy.db.bottomMargin = math_abs(arena1Bottom - arena2Top)
-        Gladdy:UpdateFrame()
     end
 end
 

@@ -12,6 +12,11 @@ local L = Gladdy.L
 
 -- 3.3.5a compat: CreateTextureMarkup may not exist
 local CreateTextureMarkup = CreateTextureMarkup or function(file, fileWidth, fileHeight, width, height, left, right, top, bottom, xOffset, yOffset)
+    -- A missing icon (GetSpellInfo/spec-icon lookup returns nil for a spell not known
+    -- on this client) would make string.format("%s", nil) raise "bad argument #2 to
+    -- 'format'", aborting the whole options build and leaving Gladdy unregistered with
+    -- AceConfig. Return an empty markup instead, like the texture-guarded callers do.
+    if not file then return "" end
     return string.format("|T%s:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d|t", file, height, width, xOffset or 0, yOffset or 0, fileWidth, fileHeight, left * fileWidth, right * fileWidth, top * fileHeight, bottom * fileHeight)
 end
 -- 3.3.5a compat: the global GetSpellTexture takes a spellbook slot, not a spellID,
@@ -589,7 +594,11 @@ end
 
 function Cooldowns:ResetUnit(unit)
     local button = Gladdy.buttons[unit]
-    if not button then
+    -- The cooldown frame only exists once Cooldowns:CreateFrame has run for this unit;
+    -- Gladdy:ResetUnit iterates EVERY module for every button (incl. while the module
+    -- is disabled or before its frame is built), so guard the missing frame like the
+    -- other modules' ResetUnit do instead of indexing a nil spellCooldownFrame.
+    if not button or not button.spellCooldownFrame then
         return
     end
     for i=#button.spellCooldownFrame.icons,1,-1 do

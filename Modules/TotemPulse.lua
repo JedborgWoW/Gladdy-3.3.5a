@@ -203,7 +203,10 @@ function TotemPulse:PLAYER_ENTERING_WORLD()
     self.trackedNameplates = {}
 end
 
-function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName)
+-- 3.3.5a CLEU payload: no leading event arg from the dispatcher and no hideCaster
+-- field (see the detailed note in EventListener.lua). The earlier "_"+hideCaster
+-- signature shifted every field by one, so destGUID/eventType were wrong on stock.
+function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(timestamp, eventType, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName)
     local pulse = cooldowns[spellID] or cooldowns[spellName]
     local npcId = tonumber(select(6, strsplit("-", destGUID)), 10)
     if eventType == "UNIT_DESTROYED" and self.timeStamps[destGUID] then

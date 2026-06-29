@@ -126,7 +126,20 @@ function EventListener:CooldownCheck(eventType, srcUnit, spellName, spellID)
     end
 end
 
-function EventListener:COMBAT_LOG_EVENT_UNFILTERED(_, timestamp, eventType, hideCaster, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool)
+-- 3.3.5a COMBAT_LOG_EVENT_UNFILTERED payload (client build 12340):
+--   timestamp, subEvent, sourceGUID, sourceName, sourceFlags, destGUID, destName,
+--   destFlags, [spell/aura fields...]
+-- There is NO hideCaster (added 4.0.1) and NO source/destRaidFlags (added 4.2) on
+-- stock 3.3.5a, and awesome_wotlk.dll does not change the combat-log signature.
+-- The module dispatcher (EventListener.OnEvent) calls EventListener[event](self, ...)
+-- i.e. it passes (self, ...payload) WITHOUT the event name - exactly like every other
+-- handler in this file (e.g. ARENA_OPPONENT_UPDATE(unit, updateReason)). So this
+-- handler must NOT have a leading throwaway arg. A spurious leading "_" plus a
+-- "hideCaster" field shifted every field by one on stock 3.3.5a, which silently broke
+-- ALL combat-log tracking (interrupts, diminishing returns, death detection, smoke
+-- bomb, instant-cast/aura cooldowns) because sourceGUID/destGUID never matched.
+-- For SPELL_AURA_* events the field named extraSpellId here is the auraType ("BUFF"/"DEBUFF").
+function EventListener:COMBAT_LOG_EVENT_UNFILTERED(timestamp, eventType, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName, spellSchool, extraSpellId, extraSpellName, extraSpellSchool)
     local srcUnit = Gladdy.guids[sourceGUID] -- can be a PET
     local destUnit = Gladdy.guids[destGUID] -- can be a PET
     if (Gladdy.db.shadowsightTimerEnabled and (eventType == "SPELL_AURA_APPLIED" or eventType == "SPELL_AURA_REFRESH") and spellID == 34709) then
