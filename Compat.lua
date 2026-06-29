@@ -167,14 +167,54 @@ local uiParent = _G.UIParent
 local sampleFrame = CreateFrame("Frame", nil, uiParent)
 local sampleButton = CreateFrame("Button", nil, uiParent)
 local sampleCooldown = CreateFrame("Cooldown", nil, uiParent)
+local sampleStatusBar = CreateFrame("StatusBar", nil, uiParent)
 local sampleTexture = sampleFrame:CreateTexture()
+local sampleFontString = sampleFrame:CreateFontString()
+-- NOTE: deliberately NOT sampling an EditBox here - a bare CreateFrame("EditBox")
+-- defaults to autoFocus=true and would grab keyboard focus at load.
 
 local frameMeta = getmetatable(sampleFrame).__index
 local buttonMeta = getmetatable(sampleButton).__index
 local cooldownMeta = getmetatable(sampleCooldown).__index
+local statusBarMeta = getmetatable(sampleStatusBar).__index
 local textureMeta = getmetatable(sampleTexture).__index
+local fontStringMeta = getmetatable(sampleFontString).__index
 
 local function noop() end
+
+-- (K) Region:SetSize/GetSize (Cata 4.0) and Frame:SetResizeBounds (Dragonflight 10.0)
+-- do not exist on stock 3.3.5a, but several bundled libs call them unconditionally:
+-- LibCustomGlow (the Cooldowns glow), AceConfigDialog + AceGUI TabGroup/TreeGroup/Frame
+-- (the whole options window), the GladdySearchEditBox widget, and Healthbar's absorb
+-- overlay. They WORK on the awesome_wotlk test client (which supersets these), so the
+-- gap is invisible there, but on stock 3.3.5a every one is a nil-method crash. Map them
+-- onto the genuine 3.3.5a primitives (SetWidth/SetHeight, SetMinResize/SetMaxResize).
+-- Each widget type has its own method table on 3.3.5a, so add to each separately; the
+-- `if not` guard makes this inert wherever the method already exists.
+local function addSizeShims(meta)
+    if not meta then return end
+    if not meta.SetSize then
+        meta.SetSize = function(self, w, h) self:SetWidth(w); self:SetHeight(h or w) end
+    end
+    if not meta.GetSize then
+        meta.GetSize = function(self) return self:GetWidth(), self:GetHeight() end
+    end
+end
+for _, meta in ipairs({ frameMeta, buttonMeta, cooldownMeta, statusBarMeta, textureMeta, fontStringMeta }) do
+    addSizeShims(meta)
+end
+if not frameMeta.SetResizeBounds then
+    frameMeta.SetResizeBounds = function(self, minW, minH, maxW, maxH)
+        if self.SetMinResize then self:SetMinResize(minW or 0, minH or 0) end
+        if maxW and self.SetMaxResize then self:SetMaxResize(maxW, maxH or maxW) end
+    end
+end
+
+-- (K) Cooldown:Clear (Cata 4.0): Auras/Racial/Trinket call cooldown:Clear() to wipe the
+-- spiral; absent on stock 3.3.5a. SetCooldown(0, 0) clears it the 3.3.5a way.
+if not cooldownMeta.Clear then
+    cooldownMeta.Clear = function(self) self:SetCooldown(0, 0) end
+end
 
 -- (H) Retail frame methods used unguarded by AceConfigDialog-3.0:
 --     SetPropagateKeyboardInput (Legion), SetFixedFrameStrata/Level (9.0).

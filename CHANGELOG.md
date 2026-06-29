@@ -42,6 +42,25 @@ Version numbers follow the `.toc` `## Version:` and only change on an explicit r
   buttons exist, and only flip `newLayout` then, so an old profile defers the one-time
   migration instead of indexing a nil button (and half-finishing the migration).
 
+### Fixed — stock 3.3.5a API gaps (masked by the awesome_wotlk test client)
+Full audit for calls to functions that do not exist on stock 3.3.5a. All were working on
+the awesome_wotlk test client (a superset) but would nil-crash on a plain 3.3.5a client.
+Added guarded shims in `Compat.lua` mapping each onto the genuine 3.3.5a primitive (the
+`if not` guard makes them inert where the method already exists):
+- **`Region:SetSize` / `Region:GetSize`** (Cata 4.0) → `SetWidth`/`SetHeight`,
+  `GetWidth`/`GetHeight`. Used by LibCustomGlow (Cooldowns glow), AceConfigDialog +
+  AceGUI TabGroup/TreeGroup (the options window), the GladdySearchEditBox widget, and
+  Healthbar's absorb overlay. Added to the Frame/Button/Cooldown/StatusBar/Texture/
+  FontString method tables (each widget type has its own on 3.3.5a).
+- **`Frame:SetResizeBounds`** (Dragonflight 10.0) → `SetMinResize`/`SetMaxResize`. Used by
+  AceGUI Frame/TreeGroup/Window containers when the options window is built.
+- **`Cooldown:Clear`** (Cata 4.0) → `SetCooldown(0, 0)`. Used by Auras/Racial/Trinket to
+  wipe the cooldown spiral.
+Audit also confirmed clean: no `CombatLogGetCurrentEventInfo`, no `Mixin`/`CreateFromMixins`,
+no `SetShown`, no `table.unpack`/`table.pack`, no Lua 5.2 syntax; every `C_*` reference (in
+the addon and bundled libs) is already guarded with an `if`/`or` fallback or commented out;
+`C_Timer` is polyfilled in AceTimer.
+
 ### Notes
 - Verified: every `.lua` parses under Lua 5.1; Death Knight cooldown/interrupt/aura/spec
   data in `Constants_Wrath.lua` uses correct 3.3.5a spell ids (Mind Freeze 47528,
