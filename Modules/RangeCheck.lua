@@ -208,12 +208,20 @@ function RangeCheck:isAutoattackInRange(button)
         return nil
     end
 
-    if not IsItemInRange(16114, button.unit) then --not in melee range
-        return 0
-    elseif IsCurrentSpell(6603) == false then --auto attack is not queued
+    -- 3.3.5a: IsItemInRange wants an owned item name/link, so a bare itemID yields
+    -- nil for everyone - which the old `if not ...` read as "never in melee range".
+    -- Fall back to CheckInteractDistance (duel range, ~10yd) when the item form
+    -- cannot answer. (The old IsCurrentSpell(6603) branch returned 1 either way and
+    -- IsCurrentSpell does not exist on 3.3.5a, so it is gone.)
+    local inMelee = IsItemInRange and IsItemInRange(16114, button.unit)
+    if inMelee == nil then
+        inMelee = CheckInteractDistance(button.unit, 3) and 1 or 0
+    end
+    -- normalize: 3.3.5a IsItemInRange returns 1/0, retail-style returns true/false
+    if inMelee == 1 or inMelee == true then
         return 1
     else
-        return 1
+        return 0
     end
 end
 

@@ -155,24 +155,54 @@ end
 
 function Gladdy:GetSpellIdByName(spellName)
     if not self._spellNameToId then
-        self._spellNameToId = {}
-        -- Build from specSpells and specBuffs
-        if self.specSpells then
-            for id, _ in pairs(self.specSpells) do
-                if type(id) == "number" then
-                    local name = GetSpellInfo(id)
-                    if name then self._spellNameToId[name] = id end
+        -- 3.3.5a: this cache is what resolves a spell NAME back to a numeric id
+        -- (UNIT_SPELLCAST_SUCCEEDED carries no spellID before 4.0.1). specSpells/
+        -- specBuffs are keyed by NAME, so the old build loop over them never added
+        -- a single entry - build from the numeric-keyed data tables instead:
+        -- trinkets, the per-class cooldown list (incl. rank lists), interrupts and
+        -- racials. First id registered for a name wins, so canonical ids (the list
+        -- keys) are added before their alternate ranks.
+        local map = {}
+        local function add(id)
+            if type(id) == "number" then
+                local name = GetSpellInfo(id)
+                if name and not map[name] then
+                    map[name] = id
                 end
             end
         end
-        if self.specBuffs then
-            for id, _ in pairs(self.specBuffs) do
-                if type(id) == "number" then
-                    local name = GetSpellInfo(id)
-                    if name then self._spellNameToId[name] = id end
+        add(42292) -- PvP Trinket
+        add(59752) -- Every Man for Himself
+        if self.GetCooldownList then
+            for _, spellTable in pairs(self:GetCooldownList()) do
+                for spellId, val in pairs(spellTable) do
+                    add(spellId)
+                    if type(val) == "table" and val.spellIDs then
+                        for _, rankedId in ipairs(val.spellIDs) do
+                            add(rankedId)
+                        end
+                    end
                 end
             end
         end
+        if self.GetInterrupts then
+            for _, info in pairs(self:GetInterrupts()) do
+                add(info.spellID)
+                if info.spellIDs then
+                    for _, rankedId in ipairs(info.spellIDs) do
+                        add(rankedId)
+                    end
+                end
+            end
+        end
+        if self.Racials then
+            for _, info in pairs(self:Racials()) do
+                for k in pairs(info) do
+                    add(k) -- the numeric keys are the racial spell ids
+                end
+            end
+        end
+        self._spellNameToId = map
     end
     return self._spellNameToId[spellName]
 end
@@ -260,7 +290,10 @@ local function toHex(color)
     return str_format("%.2x%.2x%.2x", floor(color.r * 255), floor(color.g * 255), floor(color.b * 255))
 end
 function Gladdy:SetTextColor(text, color)
-    return "|cff" .. toHex(color) .. text or "" .. "|r"
+    -- precedence bug: `a .. b or "" .. "|r"` parsed as `(a..b) or ("".."|r")`, so the
+    -- closing |r was never appended (colour bled into following text) and a nil text
+    -- crashed the concat before the `or` could catch it
+    return "|cff" .. toHex(color) .. (text or "") .. "|r"
 end
 
 function Gladdy:SetRGBTextColor(text, r, g, b)

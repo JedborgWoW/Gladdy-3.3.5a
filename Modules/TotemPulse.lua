@@ -203,12 +203,35 @@ function TotemPulse:PLAYER_ENTERING_WORLD()
     self.trackedNameplates = {}
 end
 
+-- 3.3.5a GUIDs are plain hex strings ("0xF130xxxxxx..."), NOT the dash-separated
+-- "Creature-0-...-npcId-..." format (Legion+). strsplit("-") on a hex GUID yields a
+-- single value, so tonumber(select(6, ...), 10) errored on every combat-log event.
+-- Prefer awesome_wotlk's native GetCreatureIDFromGUID; otherwise the npc id lives in
+-- hex chars 6-12 (same extraction the TurboPlates backport uses on this client).
+local function npcIdFromGuid(guid)
+    if type(guid) ~= "string" or guid == "" then
+        return nil
+    end
+    if GetCreatureIDFromGUID then
+        local id = GetCreatureIDFromGUID(guid)
+        if id and id > 0 then
+            return id
+        end
+    end
+    if guid:find("-", 1, true) then -- modern dash format, npc id is the 6th part
+        return tonumber((select(6, strsplit("-", guid))), 10)
+    end
+    if #guid >= 12 then
+        return tonumber(guid:sub(6, 12), 16)
+    end
+end
+
 -- 3.3.5a CLEU payload: no leading event arg from the dispatcher and no hideCaster
 -- field (see the detailed note in EventListener.lua). The earlier "_"+hideCaster
 -- signature shifted every field by one, so destGUID/eventType were wrong on stock.
 function TotemPulse:COMBAT_LOG_EVENT_UNFILTERED(timestamp, eventType, sourceGUID, sourceName, sourceFlags, destGUID, destName, destFlags, spellID, spellName)
     local pulse = cooldowns[spellID] or cooldowns[spellName]
-    local npcId = tonumber(select(6, strsplit("-", destGUID)), 10)
+    local npcId = npcIdFromGuid(destGUID)
     if eventType == "UNIT_DESTROYED" and self.timeStamps[destGUID] then
         self.timeStamps[destGUID] = nil
     end
@@ -261,7 +284,7 @@ function TotemPulse:FindTimestampForTotemName(name)
     for guid, data in pairs(self.timeStamps) do
         if data.id then
             -- Check if the nameplate name matches a known totem name
-            local npcId = tonumber(select(6, strsplit("-", guid)), 10)
+            local npcId = npcIdFromGuid(guid)
             if npcId and npcIdToTotemData[npcId] then
                 -- Get the spell name for this totem to compare
                 local spellName = GetSpellInfo(npcIdToTotemData[npcId].id)

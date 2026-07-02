@@ -27,57 +27,63 @@ local classIcons = {
 }
 Gladdy.classIcons = classIcons
 
+-- 3.3.5a cannot resolve numeric texture fileIDs (the upstream values), which left the
+-- optional spec icons blank. Derive each icon from a core 3.3.5a spell instead - these
+-- ids all exist in the 12340 client, so GetSpellInfo always yields a real texture path.
+local function specIcon(spellId)
+    return select(3, GetSpellInfo(spellId))
+end
 local specIcons = {
     ["DRUID"] = {
-        [L["Balance"]] = 136096, -- Moonfire
-        [L["Feral"]] = 132115, -- Cat Form
-        [L["Restoration"]] = 136041, -- Healing Touch
-        [L["Guardian"]] = 132276, -- Bear Form
+        [L["Balance"]] = specIcon(8921), -- Moonfire
+        [L["Feral"]] = specIcon(768), -- Cat Form
+        [L["Restoration"]] = specIcon(5185), -- Healing Touch
+        [L["Guardian"]] = specIcon(5487), -- Bear Form
     },
     ["DEATHKNIGHT"] = {
-        [L["Unholy"]] = 135775, -- Unholy Presence
-        [L["Frost"]] = 135773, -- Frost Presence
-        [L["Blood"]] = 135770, -- Blood Presence
+        [L["Unholy"]] = specIcon(48265), -- Unholy Presence
+        [L["Frost"]] = specIcon(48263), -- Frost Presence
+        [L["Blood"]] = specIcon(48266), -- Blood Presence
     },
     ["HUNTER"] = {
-        [L["Beast Mastery"]] = 461112, -- Tame Beast --461112
-        [L["Marksmanship"]] = 236179, -- Focused Aim
-        [L["Survival"]] = 461113, -- Mongoose Bite or Camouflage
+        [L["Beast Mastery"]] = specIcon(19574), -- Bestial Wrath
+        [L["Marksmanship"]] = specIcon(19506), -- Trueshot Aura
+        [L["Survival"]] = specIcon(53301), -- Explosive Shot
     },
     ["MAGE"] = {
-        [L["Arcane"]] = 135932, -- Arcane Intellect
-        [L["Fire"]] = 135812, -- Fireball
-        [L["Frost"]] = 135846, -- Frostbolt
+        [L["Arcane"]] = specIcon(1459), -- Arcane Intellect
+        [L["Fire"]] = specIcon(133), -- Fireball
+        [L["Frost"]] = specIcon(116), -- Frostbolt
     },
     ["PALADIN"] = {
-        [L["Holy"]] = 135920, -- Holy Light
-        [L["Retribution"]] = 135873, -- Retribution Aura
-        [L["Protection"]] = 236264, -- Ability_paladin_shieldofthetemplar
+        [L["Holy"]] = specIcon(635), -- Holy Light
+        [L["Retribution"]] = specIcon(7294), -- Retribution Aura
+        [L["Protection"]] = specIcon(20925), -- Holy Shield
     },
     ["PRIEST"] = {
-        [L["Discipline"]] = 135940, -- Power Word: Shield
-        [L["Shadow"]] = 136207, -- Shadow Word: Pain
-        [L["Holy"]] = 237542, -- Guardian Spirit
+        [L["Discipline"]] = specIcon(17), -- Power Word: Shield
+        [L["Shadow"]] = specIcon(589), -- Shadow Word: Pain
+        [L["Holy"]] = specIcon(47788), -- Guardian Spirit
     },
     ["ROGUE"] = {
-        [L["Assassination"]] = 132292, -- Eviscerate
-        [L["Combat"]] = 132090, -- Backstab
-        [L["Subtlety"]] = 132320, -- Stealth
+        [L["Assassination"]] = specIcon(2098), -- Eviscerate
+        [L["Combat"]] = specIcon(53), -- Backstab
+        [L["Subtlety"]] = specIcon(1784), -- Stealth
     },
     ["SHAMAN"] = {
-        [L["Elemental"]] = 136048, -- Lightning Bolt
-        [L["Enhancement"]] = 237581, -- Unleash Elements
-        [L["Restoration"]] = 136052, -- Healing Wave
+        [L["Elemental"]] = specIcon(403), -- Lightning Bolt
+        [L["Enhancement"]] = specIcon(17364), -- Stormstrike
+        [L["Restoration"]] = specIcon(331), -- Healing Wave
     },
     ["WARLOCK"] = {
-        [L["Affliction"]] = 136145, -- Affliction
-        [L["Demonology"]] = 136172, -- Sense Demons
-        [L["Destruction"]] = 136186, -- Rain of Fire
+        [L["Affliction"]] = specIcon(30108), -- Unstable Affliction
+        [L["Demonology"]] = specIcon(47241), -- Metamorphosis
+        [L["Destruction"]] = specIcon(5740), -- Rain of Fire
     },
     ["WARRIOR"] = {
-        [L["Arms"]] = 132355, -- Mortal Strike
-        [L["Fury"]] = 132347, -- Inner Rage
-        [L["Protection"]] = 132341, -- Defensive Stance
+        [L["Arms"]] = specIcon(12294), -- Mortal Strike
+        [L["Fury"]] = specIcon(23881), -- Bloodthirst
+        [L["Protection"]] = specIcon(71), -- Defensive Stance
     },
 }
 function Gladdy:GetSpecIcons()

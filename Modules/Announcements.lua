@@ -169,7 +169,12 @@ function Announcements:SPELL_INTERRUPT(unit,spellID,spellName,spellSchool,extraS
     end
     if Gladdy.db.announcements.spellInterruptSpellSchool then
         if extraSpellSchool ~= "unknown" then
-            extraSpellName = GetSchoolString(extraSpellSchool)
+            -- GetSchoolString is not guaranteed on 3.3.5a - fall back to the school
+            -- names Gladdy already carries in its spell-school colour table
+            local schoolColor = Gladdy:GetSpellSchoolColors()[extraSpellSchool]
+            extraSpellName = (GetSchoolString and GetSchoolString(extraSpellSchool))
+                    or (schoolColor and schoolColor.type)
+                    or extraSpellName
         end
     end
     self:Send(L["INTERRUPTED: %s (%s)"]:format(extraSpellName, button.name or ""), 1, RAID_CLASS_COLORS[button.class], unit)

@@ -1,6 +1,7 @@
 local select, string_gsub, tostring, pairs, ipairs = select, string.gsub, tostring, pairs, ipairs
 local wipe = wipe
 local unpack = unpack
+local abs = math.abs
 
 local AURA_TYPE_DEBUFF, AURA_TYPE_BUFF = "DEBUFF", "BUFF"
 
@@ -206,7 +207,8 @@ function EventListener:COMBAT_LOG_EVENT_UNFILTERED(timestamp, eventType, sourceG
             Gladdy:SpotEnemy(srcUnit, true, true)
         end
         if not Gladdy.buttons[srcUnit].spec then
-            self:DetectSpec(srcUnit, (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]))
+            -- 3.3.5a: specSpells/specBuffs are keyed by spell NAME, not spellID
+            self:DetectSpec(srcUnit, (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]))
         end
         if (eventType == "SPELL_DISPEL") then
             EventListener:CooldownCheck(eventType, srcUnit, spellName, spellID)
@@ -305,7 +307,12 @@ function EventListener:UNIT_AURA(unit)
         if not skip then
             if self.friendlyUnits[unit] then
                 for n = 1, 30 do
-                    local spellName, texture, count, dispelType, duration, expirationTime, unitCaster, _, shouldConsolidate, spellID = UnitAura(unit, n, "HARMFUL")
+                    -- 3.3.5a UnitAura returns rank as the 2nd value (removed in Legion):
+                    -- name, rank, icon, count, debuffType, duration, expirationTime,
+                    -- unitCaster, isStealable, shouldConsolidate, spellId. The modern
+                    -- (rank-less) destructuring shifted every field by one and put
+                    -- shouldConsolidate into spellID, killing the whole scan.
+                    local spellName, _, texture, count, dispelType, duration, expirationTime, unitCaster, _, shouldConsolidate, spellID = UnitAura(unit, n, "HARMFUL")
                     if spellName and (Gladdy.cooldownBuffs[spellName] or Gladdy.cooldownBuffs[spellID]) and unitCaster then
                         local cooldownBuff = Gladdy.cooldownBuffs[spellID] or Gladdy.cooldownBuffs[spellName]
                         for arenaUnit,v in pairs(Gladdy.buttons) do
@@ -314,7 +321,9 @@ function EventListener:UNIT_AURA(unit)
                                     Gladdy:SpotEnemy(arenaUnit, false, true)
                                 end
                                 if not v.class and Gladdy.expansion == "Wrath" then
-                                    Gladdy.buttons[arenaUnit].class = Gladdy.cooldownBuffs[spellName].class
+                                    -- use the already-resolved entry: the name lookup is nil
+                                    -- when the buff matched via its numeric spellID key
+                                    Gladdy.buttons[arenaUnit].class = cooldownBuff.class
                                     Cooldowns:UpdateCooldowns(Gladdy.buttons[arenaUnit])
                                 end
                                 Cooldowns:CooldownUsed(arenaUnit, Gladdy.buttons[arenaUnit].class, cooldownBuff.spellId, cooldownBuff.cd(expirationTime - GetTime()))
@@ -356,7 +365,8 @@ function EventListener:ScanAuras(unit)
         local filter = (i == 1 and "HELPFUL" or "HARMFUL")
         local auraType = i == 1 and AURA_TYPE_BUFF or AURA_TYPE_DEBUFF
         for n = 1, 30 do
-            local spellName, texture, count, dispelType, duration, expirationTime, unitCaster, _, shouldConsolidate, spellID = UnitAura(unit, n, filter)
+            -- 3.3.5a UnitAura signature includes rank as the 2nd value (see note above)
+            local spellName, _, texture, count, dispelType, duration, expirationTime, unitCaster, _, shouldConsolidate, spellID = UnitAura(unit, n, filter)
             if ( not spellID ) then
                 Gladdy:SendMessage("AURA_GAIN_LIMIT", unit, auraType, n - 1)
                 break
@@ -366,9 +376,24 @@ function EventListener:ScanAuras(unit)
                 spellName = Gladdy.exceptionNames[spellID]
             end
             button.auras[spellID] = { auraType, spellID, spellName, texture, duration, expirationTime, count, dispelType }
-            if not button.spec and (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]) and unitCaster then
+            -- Diminishings feed: upstream drives the DR module from the retail UNIT_AURA
+            -- updateInfo payload (added/updated/removed aura instances, 10.0+), which does
+            -- not exist on 3.3.5a - so nothing ever sent UNIT_AURA_GAIN/REFRESH/FADE and
+            -- DR tracking was dead. Reproduce updateInfo by diffing this scan vs lastAuras.
+            do
+                local lastAura = button.lastAuras[spellID]
+                local isHarmful = auraType == AURA_TYPE_DEBUFF
+                if not lastAura then
+                    Gladdy:SendMessage("UNIT_AURA_GAIN", unit, spellID, expirationTime, isHarmful)
+                elseif expirationTime and lastAura[6] and abs(expirationTime - lastAura[6]) > 0.2 then
+                    Gladdy:SendMessage("UNIT_AURA_REFRESH", unit, spellID, expirationTime, isHarmful)
+                end
+            end
+            -- 3.3.5a: specSpells/specBuffs are keyed by spell NAME (GetSpellInfo(id) at
+            -- load), so index them with the name - a numeric spellID never matches.
+            if not button.spec and (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]) and unitCaster then
                 if unitCaster and (UnitIsUnit(unit, unitCaster) or UnitIsUnit(unitPet, unitCaster)) then
-                    self:DetectSpec(unit, (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]))
+                    self:DetectSpec(unit, (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]))
                 end
             end
             if (Gladdy.cooldownBuffs[spellName] or Gladdy.cooldownBuffs[spellID]) and unitCaster then -- Check for auras that hint used CDs (like Fear Ward)
@@ -380,7 +405,9 @@ function EventListener:ScanAuras(unit)
                 end
             end
             if Gladdy.cooldownBuffs.racials[spellName] then
-                Gladdy:SendMessage("RACIAL_USED", unit, spellName, Gladdy.cooldownBuffs.racials[spellName].cd(expirationTime - GetTime()), spellName)
+                -- Racial:RACIAL_USED expects (unit, startTime, spellName); the old
+                -- (unit, spellName, cd, spellName) form always failed its name check
+                Gladdy:SendMessage("RACIAL_USED", unit, GetTime(), spellName)
             end
             local sourceGUID = unitCaster and UnitGUID(unitCaster)
             if spellID == 88611 and Gladdy.bombExpireTime[sourceGUID] then
@@ -394,6 +421,8 @@ function EventListener:ScanAuras(unit)
     for spellID,v in pairs(button.lastAuras) do
         if not button.auras[spellID] then
             local spellName = v[3]
+            -- Diminishings feed (see the diff note above): the aura is gone this scan
+            Gladdy:SendMessage("UNIT_AURA_FADE", unit, spellID, v[1] == AURA_TYPE_DEBUFF)
             if Gladdy.db.cooldown and Cooldowns:GetCanonicalSpellID(spellID) then
                 -- Use canonical spellID for consistency
                 local spellId = Cooldowns:GetCanonicalSpellID(spellID)
@@ -422,11 +451,9 @@ end
 function EventListener:UNIT_SPELLCAST_START(unit)
     if Gladdy.buttons[unit] then
         local spellName = UnitCastingInfo(unit)
-        if spellName then
-            local spellID = Gladdy:GetSpellIdByName(spellName)
-            if spellID and (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]) and not Gladdy.buttons[unit].spec then
-                self:DetectSpec(unit, (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]))
-            end
+        -- 3.3.5a: specSpells/specBuffs are keyed by spell NAME - look up directly
+        if spellName and (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]) and not Gladdy.buttons[unit].spec then
+            self:DetectSpec(unit, (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]))
         end
     end
 end
@@ -434,15 +461,17 @@ end
 function EventListener:UNIT_SPELLCAST_CHANNEL_START(unit)
     if Gladdy.buttons[unit] then
         local spellName = UnitChannelInfo(unit)
-        if spellName then
-            local spellID = Gladdy:GetSpellIdByName(spellName)
-            if spellID and (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]) and not Gladdy.buttons[unit].spec then
-                self:DetectSpec(unit, (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]))
-            end
+        -- 3.3.5a: specSpells/specBuffs are keyed by spell NAME - look up directly
+        if spellName and (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]) and not Gladdy.buttons[unit].spec then
+            self:DetectSpec(unit, (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]))
         end
     end
 end
 
+-- 3.3.5a payload is (unit, spellName, rank, lineID) - the trailing spellID was only
+-- added in 4.0.1, so on stock it is ALWAYS nil and everything keyed on it (trinket,
+-- racial, cooldown tracking, spec detection) silently never fired. Resolve the id
+-- from the spell name; a client that does pass a real spellID keeps using it.
 function EventListener:UNIT_SPELLCAST_SUCCEEDED(unit, spellName, rank, lineID, spellID)
     unit = Gladdy:GetArenaUnit(unit, true)
     local button = Gladdy.buttons[unit]
@@ -453,6 +482,9 @@ function EventListener:UNIT_SPELLCAST_SUCCEEDED(unit, spellName, rank, lineID, s
         if not spellName then
             spellName = GetSpellInfo(spellID)
         end
+        if not spellID and spellName then
+            spellID = Gladdy:GetSpellIdByName(spellName)
+        end
         local unitRace = button.race
         local unitClass = button.class
 
@@ -460,8 +492,9 @@ function EventListener:UNIT_SPELLCAST_SUCCEEDED(unit, spellName, rank, lineID, s
             spellName = Gladdy.exceptionNames[spellID]
         end
 
-        if spellName and (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]) and not button.spec then
-            self:DetectSpec(unit, (Gladdy.specSpells[spellID] or Gladdy.specBuffs[spellID]))
+        -- 3.3.5a: specSpells/specBuffs are keyed by spell NAME, not spellID
+        if spellName and (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]) and not button.spec then
+            self:DetectSpec(unit, (Gladdy.specSpells[spellName] or Gladdy.specBuffs[spellName]))
         end
 
         if spellID == 42292 or spellID == 59752 then

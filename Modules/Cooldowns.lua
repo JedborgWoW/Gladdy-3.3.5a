@@ -976,7 +976,13 @@ function Cooldowns:CooldownUsed(unit, unitClass, spellID, expirationTimeInSecond
     -- Use canonical spellID for consistency
     local spellId = Cooldowns:GetCanonicalSpellID(spellID)
 
-    local cooldown = Gladdy:GetCooldownList()[unitClass][spellId]
+    -- unitClass can be nil when a caller reacts before SpotEnemy resolved the class
+    -- (e.g. a cooldown buff seen on a friendly unit) - indexing nil would error
+    local classList = unitClass and Gladdy:GetCooldownList()[unitClass]
+    if not classList then
+        return
+    end
+    local cooldown = classList[spellId]
     local cd = cooldown
     if (type(cooldown) == "table") then
         -- check if enabled

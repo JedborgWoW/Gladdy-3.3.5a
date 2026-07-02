@@ -354,8 +354,13 @@ Castbar.CastEventsFunc["UNIT_SPELLCAST_START"] = function(castBar, event, ...)
     castBar.fadeOut = nil
     Castbar:CAST_START(castBar.unit, name, texture, castBar.value, castBar.maxValue, notInterruptible)
 end
+-- 3.3.5a: the UNIT_SPELLCAST_* payload is (unit, spellName, rank, lineID) - the cast
+-- counter matching castID is the 4th arg, not the 2nd like on 4.0+ clients (Blizzard's
+-- own 3.3.5 CastingBarFrame compares select(4, ...)). With select(2, ...) the spell
+-- NAME was compared against the numeric castID, so stop/fail/interrupt never matched
+-- and the bar kept filling after the cast had already ended.
 Castbar.CastEventsFunc["UNIT_SPELLCAST_SUCCEEDED"] = function(castBar, event, ...)
-    if (castBar.casting and event == "UNIT_SPELLCAST_SUCCEEDED" and select(2, ...) == castBar.castID) then
+    if (castBar.casting and event == "UNIT_SPELLCAST_SUCCEEDED" and select(4, ...) == castBar.castID) then
         if ( castBar.spark ) then
             castBar.spark:Hide()
         end
@@ -371,7 +376,7 @@ Castbar.CastEventsFunc["UNIT_SPELLCAST_STOP"] = function(castBar, event, ...)
     if ( not castBar:IsVisible() ) then
         castBar:SetAlpha(0)
     end
-    if ( (castBar.casting and event == "UNIT_SPELLCAST_STOP" and select(2, ...) == castBar.castID) or
+    if ( (castBar.casting and event == "UNIT_SPELLCAST_STOP" and select(4, ...) == castBar.castID) or
             (castBar.channeling and event == "UNIT_SPELLCAST_CHANNEL_STOP") ) then
         if ( castBar.spark ) then
             castBar.spark:Hide()
@@ -391,7 +396,7 @@ end
 Castbar.CastEventsFunc["UNIT_SPELLCAST_CHANNEL_STOP"] = Castbar.CastEventsFunc["UNIT_SPELLCAST_STOP"]
 Castbar.CastEventsFunc["UNIT_SPELLCAST_FAILED"] = function(castBar, event, ...)
     if ( castBar:IsShown() and
-            (castBar.casting and select(2, ...) == castBar.castID) and not castBar.fadeOut ) then
+            (castBar.casting and select(4, ...) == castBar.castID) and not castBar.fadeOut ) then
         if ( castBar.spark ) then
             castBar.spark:Hide()
         end
@@ -473,7 +478,11 @@ Castbar.CastEventsFunc["UNIT_SPELLCAST_INTERRUPTIBLE"] = function(castBar, event
         end
     end
 end
-Castbar.CastEventsFunc["UNIT_SPELLCAST_CHANNEL_UPDATE"] = Castbar.CastEventsFunc["UNIT_SPELLCAST_INTERRUPTIBLE"]
+-- copy-paste bug: this line assigned the INTERRUPTIBLE handler onto CHANNEL_UPDATE,
+-- overwriting the real channel-update handler above AND leaving the registered
+-- UNIT_SPELLCAST_NOT_INTERRUPTIBLE event without any handler (a nil-call error the
+-- moment it fired). NOT_INTERRUPTIBLE is the event that shares this handler.
+Castbar.CastEventsFunc["UNIT_SPELLCAST_NOT_INTERRUPTIBLE"] = Castbar.CastEventsFunc["UNIT_SPELLCAST_INTERRUPTIBLE"]
 
 function Castbar.OnEvent(self, event, ...)
     local unit = ...

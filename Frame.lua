@@ -385,12 +385,24 @@ function Gladdy:CreateButton(i)
                 self:Hide()
             end
         end)
+        -- Callers use the full AnimationGroup interface (Options.lua does
+        -- IsPlaying()/Stop() before Play()), so the OnUpdate-based stand-in must
+        -- provide all three or those calls nil-error.
         secure.ActivationAnimation = {
             Play = function()
                 elapsed = 0
                 testModeBorder:SetAlpha(0.8)
                 testModeBorder:Show()
                 animFrame:Show()
+            end,
+            IsPlaying = function()
+                return animFrame:IsShown()
+            end,
+            Stop = function()
+                elapsed = 0
+                testModeBorder:SetAlpha(0)
+                testModeBorder:Hide()
+                animFrame:Hide()
             end,
         }
     end

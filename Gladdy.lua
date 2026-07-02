@@ -372,6 +372,10 @@ function Gladdy:OnInitialize()
     self.cooldownSpellIds = {}
     self.spellTextures = {}
     self.specSpells = self:GetSpecSpells()
+    -- specBuffs was never assigned, so every "specSpells[x] or specBuffs[x]" lookup
+    -- in EventListener errored ("attempt to index field 'specBuffs' (a nil value)")
+    -- the first time the specSpells side missed
+    self.specBuffs = self:GetSpecBuffs()
     self.buttons = {}
     self.guids = {}
     self.curBracket = nil

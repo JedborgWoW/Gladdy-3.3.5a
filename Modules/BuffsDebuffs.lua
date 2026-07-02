@@ -255,7 +255,10 @@ function BuffsDebuffs:AURA_GAIN(unit, auraType, spellID, spellName, texture, dur
     end
     local auraFrame = self.frames[unit]
     spellName = LibClassAuras.GetAltName(spellID) or spellName
-    local enabledAura = Gladdy.enabledAuras[spellID]
+    -- Gladdy.enabledAuras is nested by aura type ([BUFF]/[DEBUFF]), so indexing it
+    -- directly with a spellID always returned nil and CC auras tracked by the Auras
+    -- module were duplicated into the buff/debuff rows regardless of the option
+    local enabledAura = Gladdy.enabledAuras[auraType] and Gladdy.enabledAuras[auraType][spellID]
     if enabledAura and Gladdy.db.buffsShowAuraDebuffs then
         enabledAura = false
     end

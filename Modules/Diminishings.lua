@@ -449,8 +449,9 @@ function Diminishings:Test(unit)
                 local duration = self:GetBaseMaxDuration(enabledCategories[i].spellIDs[index]) or 8
                 if applied > 1 then
                     duration = duration / (applied == 2 and 4 or 2)
-                    self:UNIT_AURA_REFRESH(unit, enabledCategories[i].spellIDs[index], duration)
-                    self:UNIT_AURA_FADE(unit, enabledCategories[i].spellIDs[index])
+                    -- the handlers drop calls without isHarmful, so pass it in test mode too
+                    self:UNIT_AURA_REFRESH(unit, enabledCategories[i].spellIDs[index], duration, true)
+                    self:UNIT_AURA_FADE(unit, enabledCategories[i].spellIDs[index], true)
                 else
                     self:UNIT_AURA_GAIN(unit, enabledCategories[i].spellIDs[index], duration, true, true)
                     self:UNIT_AURA_FADE(unit, enabledCategories[i].spellIDs[index], true)

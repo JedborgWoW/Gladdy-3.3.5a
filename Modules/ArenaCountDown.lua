@@ -1,4 +1,5 @@
 local str_find, pairs = string.find, pairs
+local floor = math.floor
 local CreateFrame = CreateFrame
 
 local Gladdy = LibStub("Gladdy")
@@ -108,7 +109,9 @@ function ACDFrame.Ticker()
         if (self.countdown and self.countdown >= 10 and self.countdown <= 60) then
             -- Display has 2 digits
             local ones = self.countdown % 10
-            local tens = (self.countdown / 10) % 10
+            -- Lua division is float: 45/10 % 10 = 4.5, which built an invalid texture
+            -- path ("...\\4.5") for every non-multiple of ten - floor the tens digit
+            local tens = floor(self.countdown / 10) % 10
             self.ACDNumOne:Hide()
             self.ACDNumTens:Show()
             self.ACDNumOnes:Show()

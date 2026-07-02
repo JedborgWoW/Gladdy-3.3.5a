@@ -885,25 +885,36 @@ function Gladdy:GetImportantAuras()
     return importantAuras
 end
 
+-- Keyed by spell NAME (that is what the db/options use); spellIDs lists carry every
+-- 3.3.5a rank so the numeric ids seen in the combat log resolve via GetInterruptsCanonical.
 local interrupts = {
-    [GetSpellInfo(19675)] = { duration = 4, spellID = 19675, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(19675)), priority = 15 }, -- Feral Charge Effect (Druid)
-    [GetSpellInfo(2139)] = { duration = 8, spellID = 2139, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(2139)), priority = 15 }, -- Counterspell (Mage)
-    [GetSpellInfo(1766)] = { duration = 5, spellID = 1766, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(1766)), priority = 15 }, -- Kick (Rogue)
-    [GetSpellInfo(6552)] = { duration = 4, spellID = 6552, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(6552)), priority = 15 }, -- Pummel (Warrior)
-    [GetSpellInfo(72)] = { duration = 6, spellID = 72, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(72)), priority = 15 }, -- Shield Bash (Warrior)
-    [GetSpellInfo(57994)] = { duration = 2, spellID = 57994, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(57994)), priority = 15 }, -- Wind Shear (Shaman)
-    [GetSpellInfo(19244)] = { duration = 5, spellID = 19244, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(19244)), priority = 15 }, -- Spell Lock (Warlock
-    [GetSpellInfo(47528)] = { duration = 5, spellID = 47528, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(47528)), priority = 15 }, -- Mind Freeze (Deathknight)
+    [GetSpellInfo(19675)] = { duration = 4, spellID = 19675, spellIDs = { 19675, 16979 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(19675)), priority = 15 }, -- Feral Charge Effect (Druid)
+    [GetSpellInfo(2139)] = { duration = 8, spellID = 2139, spellIDs = { 2139 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(2139)), priority = 15 }, -- Counterspell (Mage)
+    [GetSpellInfo(1766)] = { duration = 5, spellID = 1766, spellIDs = { 1766, 1767, 1768, 1769, 38768 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(1766)), priority = 15 }, -- Kick (Rogue)
+    [GetSpellInfo(6552)] = { duration = 4, spellID = 6552, spellIDs = { 6552, 6554 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(6552)), priority = 15 }, -- Pummel (Warrior)
+    [GetSpellInfo(72)] = { duration = 6, spellID = 72, spellIDs = { 72, 1671, 1672, 29704 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(72)), priority = 15 }, -- Shield Bash (Warrior)
+    [GetSpellInfo(57994)] = { duration = 2, spellID = 57994, spellIDs = { 57994 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(57994)), priority = 15 }, -- Wind Shear (Shaman)
+    [GetSpellInfo(19244)] = { duration = 5, spellID = 19244, spellIDs = { 19244, 19647 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(19244)), priority = 15 }, -- Spell Lock (Warlock
+    [GetSpellInfo(47528)] = { duration = 5, spellID = 47528, spellIDs = { 47528 }, track = AURA_TYPE_DEBUFF, texture = select(3, GetSpellInfo(47528)), priority = 15 }, -- Mind Freeze (Deathknight)
 }
 function Gladdy:GetInterrupts()
     return interrupts
 end
 
-local interruptsToCanonical = {} -- Reverse lookup: spellID -> canonical spellID
+local interruptsToCanonical = {} -- Reverse lookup: name AND numeric spellID (all ranks) -> canonical key (the name)
+local interruptsToCanonicalBuilt = false
 function Gladdy:GetInterruptsCanonical()
-    if #interruptsToCanonical == 0 then
+    -- the old guard was `#interruptsToCanonical == 0`, which is always 0 for a
+    -- hash table, and nothing mapped the NUMERIC combat-log spellIDs onto the
+    -- name keys - so every SPELL_INTERRUPT lookup missed and no interrupt ever
+    -- displayed. Build once, mapping name -> name and every rank id -> name.
+    if not interruptsToCanonicalBuilt then
+        interruptsToCanonicalBuilt = true
         for spellId,info in pairs(Gladdy:GetInterrupts()) do
             interruptsToCanonical[spellId] = spellId
+            if info.spellID then
+                interruptsToCanonical[info.spellID] = spellId
+            end
             if info.spellIDs then
                 for _, rankedSpellID in pairs(info.spellIDs) do
                     interruptsToCanonical[rankedSpellID] = spellId
@@ -919,7 +930,7 @@ local cooldownList = {
     -- Mage
     ["MAGE"] = {
         [1953] = 15, -- Blink
-        [42917] = 25, -- Frost Nova
+        [42917] = { cd = 25, spellIDs = { 122, 865, 6131, 10230, 27088, 42917 }, }, -- Frost Nova (all ranks)
         [2139] = 24, -- Counterspell
         [55342] = 180, -- Mirror Image
         [12051] = 480, --Evocation
@@ -944,13 +955,13 @@ local cooldownList = {
 
     -- Priest
     ["PRIEST"] = {
-        [10890] = { cd = 27, [L["Shadow"]] = 23, }, -- Psychic Scream
+        [10890] = { cd = 27, [L["Shadow"]] = 23, spellIDs = { 8122, 8124, 10888, 10890 }, }, -- Psychic Scream (all ranks)
         [34433] = { cd = 300, [L["Shadow"]] = 180, }, -- Shadowfiend
         [15487] = { cd = 45, spec = L["Shadow"], }, -- Silence
         [64044] = { cd = 120, spec = L["Shadow"], }, -- Psychic Horror
         [64843] = 480, -- Divine Hymn
         [64901] = 360, -- Hymn of Hope
-        [32379] = 12, -- Shadow Word: Death
+        [32379] = { cd = 12, spellIDs = { 32379, 32996, 48157, 48158 }, }, -- Shadow Word: Death (all ranks)
         [6346] = 180, -- Fear Ward
         [47585] = { cd = 75, spec = L["Shadow"], }, -- Dispersion (+ Glyph)
         [10060] = { cd = 120, spec = L["Discipline"], }, -- Power Infusion
@@ -979,9 +990,9 @@ local cooldownList = {
     ["DRUID"] = {
         [22812] = 60, -- Barkskin
         [29166] = 180, -- Innervate
-        [8983] = 60, -- Bash
-        [53312] = 60, -- Natures Grasp
-        [48505] = { cd = 90, spec = L["Balance"], }, -- Starfall
+        [8983] = { cd = 60, spellIDs = { 5211, 6798, 8983 }, }, -- Bash (all ranks)
+        [53312] = { cd = 60, spellIDs = { 16689, 16810, 16811, 16812, 16813, 17329, 27009, 53312 }, }, -- Natures Grasp (all ranks)
+        [48505] = { cd = 90, spec = L["Balance"], spellIDs = { 48505, 53199, 53200, 53201 }, }, -- Starfall (all ranks)
         [50334] = { cd = 180, spec = L["Feral"], altName = GetSpellInfo(50334) .. " Feral" }, -- Berserk
         [61336] = { cd = 180, spec = L["Feral"], }, -- Survival Instincts
         [17116] = { cd = 120, spec = L["Restoration"], }, -- Natures Swiftness
@@ -1005,12 +1016,12 @@ local cooldownList = {
 
     -- Paladin
     ["PALADIN"] = {
-        [10278] = 300, -- Hand of Protection
+        [10278] = { cd = 300, spellIDs = { 1022, 5599, 10278 }, }, -- Hand of Protection (all ranks)
         [1044] = 25, -- Hand of Freedom
         [54428] = 60, -- Divine Plea
         [6940] = 120, -- Hand of Sacrifice
         [64205] = 120, -- Divine Sacrifice
-        [10308] = { cd = 60, [L["Protection"]] = 40, }, -- Hammer of Justice
+        [10308] = { cd = 60, [L["Protection"]] = 40, spellIDs = { 853, 5588, 5589, 10308 }, }, -- Hammer of Justice (all ranks)
         [642] = { cd = 300, -- Divine Shield
                   sharedCD = {
                       cd = 30,
@@ -1033,15 +1044,15 @@ local cooldownList = {
 
     -- Warlock
     ["WARLOCK"] = {
-        [17928] = 40, -- Howl of Terror
-        [47860] = 120, -- Death Coil
+        [17928] = { cd = 40, spellIDs = { 5484, 17928 }, }, -- Howl of Terror (all ranks)
+        [47860] = { cd = 120, spellIDs = { 6789, 17925, 17926, 27223, 47859, 47860 }, }, -- Death Coil (all ranks)
         [18708] = 180, -- Feldom
         [48020] = 30, -- Demonic Circle: Port
-        [19647] = { cd = 24, pet = true, }, -- Spell Lock
-        [27277] = { cd = 8, pet = true, },  -- Devour Magic
+        [19647] = { cd = 24, pet = true, spellIDs = { 19244, 19647 }, }, -- Spell Lock (all ranks)
+        [27277] = { cd = 8, pet = true, spellIDs = { 19505, 19731, 19734, 19736, 27276, 27277, 48011 }, },  -- Devour Magic (all ranks)
         [61290] = 15,  -- Shadowflame
-        [47847] = { cd = 20, spec = L["Destruction"], }, -- Shadowfury
-        [17877] = { cd = 15, spec = L["Destruction"], }, -- Shadowburn
+        [47847] = { cd = 20, spec = L["Destruction"], spellIDs = { 30283, 30413, 30414, 47846, 47847 }, }, -- Shadowfury (all ranks)
+        [17877] = { cd = 15, spec = L["Destruction"], spellIDs = { 17877, 18867, 18868, 18869, 18870, 18871, 27263, 30546, 47826, 47827 }, }, -- Shadowburn (all ranks)
         [17962] = { cd = 10, spec = L["Destruction"], }, -- Conflagrate
         [59172] = { cd = 12, spec = L["Destruction"], }, -- Chaos Bolt
         [47241] = { cd = 180, spec = L["Demonology"], }, -- Metamorphosis
@@ -1051,12 +1062,14 @@ local cooldownList = {
 
     -- Warrior
     ["WARRIOR"] = {
-        [6552] = { cd = 10, -- Pummel
+        [6552] = { cd = 10, -- Pummel (all ranks)
+                   spellIDs = { 6552, 6554 },
                    sharedCD = {
                        [72] = true,
                    },
         },
-        [72] = { cd = 12, -- Shield Bash
+        [72] = { cd = 12, -- Shield Bash (all ranks)
+                 spellIDs = { 72, 1671, 1672, 29704 },
                  sharedCD = {
                      [6552] = true,
                  },
@@ -1064,8 +1077,8 @@ local cooldownList = {
         [18499] = 30, -- Berserker Rage
         [23920] = 10, -- Spell Reflection
         [3411] = 30, -- Intervene
-        [20252] = { cd = 30, [L["Arms"]] = 20, }, -- Intercept
-        [11578] = 15, -- Charge
+        [20252] = { cd = 30, [L["Arms"]] = 20, spellIDs = { 20252, 20616, 20617, 25272, 25275 }, }, -- Intercept (all ranks)
+        [11578] = { cd = 15, spellIDs = { 100, 6178, 11578 }, }, -- Charge (all ranks)
         [676] = 60, -- Disarm
         [5246] = 120, -- Intimidating Shout
         [2565] = 60, -- Shield Block
@@ -1098,7 +1111,8 @@ local cooldownList = {
                         [13809] = true, -- Frost Trap
                     },
         },
-        [14311] = { cd = 28, -- Freezing Trap
+        [14311] = { cd = 28, -- Freezing Trap (all ranks)
+                    spellIDs = { 1499, 14310, 14311 },
                     sharedCD = {
                         [60192] = true, -- Freezing Arrow
                         [13809] = true, -- Frost Trap
@@ -1112,7 +1126,7 @@ local cooldownList = {
         },
         [34600] = { cd = 28, }, -- Snake Trap
         [34490] = { cd = 20, spec = L["Marksmanship"], }, -- Silencing Shot
-        [19386] = { cd = 60, spec = L["Survival"], }, -- Wyvern Sting
+        [19386] = { cd = 60, spec = L["Survival"], spellIDs = { 19386, 24132, 24133, 27068, 49011, 49012 }, }, -- Wyvern Sting (all ranks)
         [53271] = { cd = 60, pet = true, }, -- Masters Call
         [19577] = { cd = 60, pet = true, }, -- Intimidation
         [19574] = { cd = 120, pet = true, }, -- Bestial Wrath
@@ -1135,14 +1149,14 @@ local cooldownList = {
 
     -- Rogue
     ["ROGUE"] = {
-        [1766] = 10, -- Kick
-        [8643] = 20, -- Kidney Shot
-        [26669] = 180, -- Evasion
-        [31224] = 60, -- Cloak of Shadow
-        [26889] = 180, -- Vanish
+        [1766] = { cd = 10, spellIDs = { 1766, 1767, 1768, 1769, 38768 }, }, -- Kick (all ranks)
+        [8643] = { cd = 20, spellIDs = { 408, 8643 }, }, -- Kidney Shot (all ranks)
+        [26669] = { cd = 180, spellIDs = { 5277, 26669 }, }, -- Evasion (all ranks)
+        [31224] = 90, -- Cloak of Shadows (cd raised 60s -> 90s in 3.1)
+        [26889] = { cd = 180, spellIDs = { 1856, 1857, 26889 }, }, -- Vanish (all ranks)
         [2094] = 120, -- Blind
         [51722] = 60, -- Dismantle
-        [11305] = 180, -- Sprint
+        [11305] = { cd = 180, spellIDs = { 2983, 8696, 11305 }, }, -- Sprint (all ranks)
         [14177] = { cd = 180, spec = L["Assassination"], }, -- Cold Blood
         [51713] = { cd = 60, spec = L["Subtlety"], }, -- Shadow Dance
         [13750] = { cd = 180, spec = L["Combat"], }, -- Adrenaline Rush
@@ -1201,7 +1215,9 @@ local racials = {
         texture = select(3, GetSpellInfo(7744))
     },
     ["BloodElf"] = {
-        [28730] = true, -- Arcane Torrent
+        [28730] = true, -- Arcane Torrent (mana)
+        [25046] = true, -- Arcane Torrent (energy - rogues)
+        [50613] = true, -- Arcane Torrent (runic power - death knights)
         duration = 120,
         spellName = select(1, GetSpellInfo(28730)),
         texture = select(3, GetSpellInfo(28730))
@@ -1233,7 +1249,13 @@ local racials = {
         texture = select(3, GetSpellInfo(58984))
     },
     ["Draenei"] = {
-        [28880] = true,
+        [28880] = true, -- Gift of the Naaru (warrior)
+        [59542] = true, -- Gift of the Naaru (paladin)
+        [59543] = true, -- Gift of the Naaru (hunter)
+        [59544] = true, -- Gift of the Naaru (priest)
+        [59545] = true, -- Gift of the Naaru (death knight)
+        [59547] = true, -- Gift of the Naaru (shaman)
+        [59548] = true, -- Gift of the Naaru (mage)
         duration = 180,
         spellName = select(1, GetSpellInfo(28880)),
         texture = select(3, GetSpellInfo(28880))
@@ -1260,6 +1282,52 @@ local racials = {
 function Gladdy:Racials()
     return racials
 end
+
+-- Buffs/debuffs whose PRESENCE in a UnitAura scan reveals an already-used cooldown
+-- (e.g. Fear Ward seen on a friendly, Blind landing on a party member). EventListener
+-- indexes this table unconditionally (incl. the .racials subtable), but upstream only
+-- ships it in Constants_BCC.lua - on Wrath it was nil and ScanAuras crashed. WotLK
+-- values; cd() converts the buff's remaining uptime into the remaining cooldown.
+Gladdy.cooldownBuffs = {
+    [GetSpellInfo(6346)] = { cd = function(expTime) -- 180s uptime == cd
+        return expTime
+    end, spellId = 6346 }, -- Fear Ward
+    [GetSpellInfo(11305)] = { cd = function(expTime) -- 15s uptime
+        return 180 - (15 - expTime)
+    end, spellId = 11305, class = "ROGUE" }, -- Sprint
+    [36554] = { cd = function(expTime) -- 3s uptime
+        return 20 - (3 - expTime)
+    end, spellId = 36554, class = "ROGUE" }, -- Shadowstep speed buff
+    [36563] = { cd = function(expTime) -- 10s uptime
+        return 20 - (10 - expTime)
+    end, spellId = 36554 }, -- Shadowstep dmg buff
+    [GetSpellInfo(26889)] = { cd = function(expTime) -- 10s uptime
+        return 180 - (10 - expTime)
+    end, spellId = 26889, class = "ROGUE" }, -- Vanish
+    [GetSpellInfo(31224)] = { cd = function(expTime) -- 5s uptime
+        return 90 - (5 - expTime)
+    end, spellId = 31224, class = "ROGUE" }, -- Cloak of Shadows
+    [GetSpellInfo(2094)] = { cd = function(expTime) -- 10s uptime
+        return 120 - (10 - expTime)
+    end, spellId = 2094, class = "ROGUE" }, -- Blind
+    racials = {
+        [GetSpellInfo(26297)] = { cd = function(expTime) -- 10s uptime
+            return 180 - (10 - expTime)
+        end, spellId = 26297 }, -- Berserking (Troll)
+        [GetSpellInfo(20572)] = { cd = function(expTime) -- 15s uptime
+            return 120 - (15 - expTime)
+        end, spellId = 20572 }, -- Blood Fury (Orc)
+        [GetSpellInfo(20594)] = { cd = function(expTime) -- 8s uptime
+            return 120 - (8 - expTime)
+        end, spellId = 20594 }, -- Stoneform (Dwarf)
+        [GetSpellInfo(7744)] = { cd = function(expTime) -- 5s uptime
+            return 120 - (5 - expTime)
+        end, spellId = 7744 }, -- Will of the Forsaken (Undead)
+        [GetSpellInfo(28880)] = { cd = function(expTime) -- 15s uptime
+            return 180 - (15 - expTime)
+        end, spellId = 28880 }, -- Gift of the Naaru (Draenei)
+    },
+}
 
 
 ---------------------
