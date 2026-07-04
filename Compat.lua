@@ -162,6 +162,13 @@ end
 -- table at getmetatable(obj).__index; adding a missing method there makes it
 -- available on every object of that type. Grab one throwaway object per type.
 -- (Done while CreateFrame is still the original, before it is wrapped below.)
+-- IMPORTANT: install NEW methods with rawset(meta, name, fn). On this client the
+-- FRAME-type method tables carry a __newindex guard that silently swallows a
+-- plain `meta.Name = fn` for a key that doesn't exist yet, leaving the method
+-- nil (a latent crash on stock 3.3.5a, where these shims actually run). Every
+-- `if not meta.Name` guard below stays chain-aware so a native is never shadowed.
+-- (Overriding an EXISTING key with plain assignment is fine -- __newindex only
+-- fires for absent keys -- so the native-wrapping shims further down keep `=`.)
 --==========================================================================
 local uiParent = _G.UIParent
 local sampleFrame = CreateFrame("Frame", nil, uiParent)
@@ -194,48 +201,48 @@ local function noop() end
 local function addSizeShims(meta)
     if not meta then return end
     if not meta.SetSize then
-        meta.SetSize = function(self, w, h) self:SetWidth(w); self:SetHeight(h or w) end
+        rawset(meta, "SetSize", function(self, w, h) self:SetWidth(w); self:SetHeight(h or w) end)
     end
     if not meta.GetSize then
-        meta.GetSize = function(self) return self:GetWidth(), self:GetHeight() end
+        rawset(meta, "GetSize", function(self) return self:GetWidth(), self:GetHeight() end)
     end
 end
 for _, meta in ipairs({ frameMeta, buttonMeta, cooldownMeta, statusBarMeta, textureMeta, fontStringMeta }) do
     addSizeShims(meta)
 end
 if not frameMeta.SetResizeBounds then
-    frameMeta.SetResizeBounds = function(self, minW, minH, maxW, maxH)
+    rawset(frameMeta, "SetResizeBounds", function(self, minW, minH, maxW, maxH)
         if self.SetMinResize then self:SetMinResize(minW or 0, minH or 0) end
         if maxW and self.SetMaxResize then self:SetMaxResize(maxW, maxH or maxW) end
-    end
+    end)
 end
 
 -- (K) Cooldown:Clear (Cata 4.0): Auras/Racial/Trinket call cooldown:Clear() to wipe the
 -- spiral; absent on stock 3.3.5a. SetCooldown(0, 0) clears it the 3.3.5a way.
 if not cooldownMeta.Clear then
-    cooldownMeta.Clear = function(self) self:SetCooldown(0, 0) end
+    rawset(cooldownMeta, "Clear", function(self) self:SetCooldown(0, 0) end)
 end
 
 -- (H) Retail frame methods used unguarded by AceConfigDialog-3.0:
 --     SetPropagateKeyboardInput (Legion), SetFixedFrameStrata/Level (9.0).
 --     No-op them - the dialog still works, it just can't pin strata/level.
-if not frameMeta.SetPropagateKeyboardInput then frameMeta.SetPropagateKeyboardInput = noop end
-if not frameMeta.SetFixedFrameStrata then frameMeta.SetFixedFrameStrata = noop end
-if not frameMeta.SetFixedFrameLevel then frameMeta.SetFixedFrameLevel = noop end
+if not frameMeta.SetPropagateKeyboardInput then rawset(frameMeta, "SetPropagateKeyboardInput", noop) end
+if not frameMeta.SetFixedFrameStrata then rawset(frameMeta, "SetFixedFrameStrata", noop) end
+if not frameMeta.SetFixedFrameLevel then rawset(frameMeta, "SetFixedFrameLevel", noop) end
 
 -- (H) Frame:SetClipsChildren (Legion) is called unguarded by ExportImport on the
 --     AceGUI MultiLineEditBox frame. No-op it - on 3.3.5a children just aren't
 --     clipped to the frame bounds, which is purely cosmetic for the export box.
-if not frameMeta.SetClipsChildren then frameMeta.SetClipsChildren = noop end
+if not frameMeta.SetClipsChildren then rawset(frameMeta, "SetClipsChildren", noop) end
 
 -- (H) Frame:SetIgnoreParentAlpha (BfA) is called by TotemPlates on the totem
 --     overlay frame so it stays opaque while the nameplate fades. No-op on
 --     3.3.5a: the overlay just inherits the nameplate's alpha (cosmetic only).
-if not frameMeta.SetIgnoreParentAlpha then frameMeta.SetIgnoreParentAlpha = noop end
+if not frameMeta.SetIgnoreParentAlpha then rawset(frameMeta, "SetIgnoreParentAlpha", noop) end
 
 -- (H) Frame:SetIgnoreParentScale (BfA) - TotemPlates uses it on its test frame.
 --     No-op on 3.3.5a: the frame just inherits the parent's scale (cosmetic).
-if not frameMeta.SetIgnoreParentScale then frameMeta.SetIgnoreParentScale = noop end
+if not frameMeta.SetIgnoreParentScale then rawset(frameMeta, "SetIgnoreParentScale", noop) end
 
 -- (J) RegisterUnitEvent (MoP): missing on STOCK 3.3.5a (many private cores -
 --     incl. the one this is tested on - backport it; if present we leave it
@@ -272,7 +279,7 @@ if not frameMeta.RegisterUnitEvent then
         -- translate a 3.3.5a event back to the modern name the handler expects
         if handler then return handler(self, legacyToModern[event] or event, unit, ...) end
     end
-    function frameMeta.RegisterUnitEvent(self, event, unit1, unit2)
+    rawset(frameMeta, "RegisterUnitEvent", function(self, event, unit1, unit2)
         self.__gladdyUnitFilter = self.__gladdyUnitFilter or {}
         if unit1 then self.__gladdyUnitFilter[unit1] = true end
         if unit2 then self.__gladdyUnitFilter[unit2] = true end
@@ -302,7 +309,7 @@ if not frameMeta.RegisterUnitEvent then
                 pcall(self.RegisterEvent, self, leg)
             end
         end
-    end
+    end)
 end
 
 -- (D) Texture inheritance templates added after 3.3.5a. The Healthbar absorb bar
@@ -324,7 +331,7 @@ end
 
 -- (H) Cooldown:SetHideCountdownNumbers (Legion) is called unguarded by every
 --     icon module. No-op it - 3.3.5a cooldowns never draw built-in numbers.
-if not cooldownMeta.SetHideCountdownNumbers then cooldownMeta.SetHideCountdownNumbers = noop end
+if not cooldownMeta.SetHideCountdownNumbers then rawset(cooldownMeta, "SetHideCountdownNumbers", noop) end
 
 -- (H) Texture:SetMask / SetMaskTexture (7.0): every Gladdy icon module masks its
 --     icon with "Interface\AddOns\Gladdy\Images\mask" for a rounded look. On stock
@@ -343,11 +350,11 @@ do
         if origSetMask then return origSetMask(self, file, ...) end
     end
 end
-if not textureMeta.SetMaskTexture then textureMeta.SetMaskTexture = noop end
+if not textureMeta.SetMaskTexture then rawset(textureMeta, "SetMaskTexture", noop) end
 
 -- (H) Texture:SetIgnoreParentAlpha (BfA) - TotemPlates uses it on the totem
 --     selection-highlight texture. No-op on 3.3.5a (cosmetic, see frame shim).
-if not textureMeta.SetIgnoreParentAlpha then textureMeta.SetIgnoreParentAlpha = noop end
+if not textureMeta.SetIgnoreParentAlpha then rawset(textureMeta, "SetIgnoreParentAlpha", noop) end
 
 -- (H) AnimationGroup / Animation methods added after 3.3.5a, used by the
 --     Cooldowns activation/flash glow: SetToFinalAlpha (4.0) on the group, and
@@ -386,9 +393,9 @@ end
 -- (G) Texture:SetColorTexture (Legion). On 3.3.5a SetTexture(r,g,b,a) already
 --     sets a solid colour, so forward to it.
 if not textureMeta.SetColorTexture then
-    function textureMeta.SetColorTexture(self, r, g, b, a)
+    rawset(textureMeta, "SetColorTexture", function(self, r, g, b, a)
         return self:SetTexture(r, g, b, a or 1)
-    end
+    end)
 end
 
 --==========================================================================
@@ -468,10 +475,10 @@ if origSetHyperlink then
     end
 end
 if not tooltipMeta.SetSpellByID then
-    function tooltipMeta.SetSpellByID(self, spellId)
+    rawset(tooltipMeta, "SetSpellByID", function(self, spellId)
         if not spellId or not GetSpellInfo(spellId) then return end
         return self:SetHyperlink("spell:" .. spellId)
-    end
+    end)
 end
 
 --==========================================================================

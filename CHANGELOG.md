@@ -3,6 +3,21 @@
 All notable changes to this 3.3.5a backport are listed here. Newest on top.
 Version numbers follow the `.toc` `## Version:` and only change on an explicit release.
 
+## [2.72-Release] — 2026-07-04
+
+### Fixed — widget-metatable shims
+- **Every added widget method now installs with `rawset`.** On this client the
+  FRAME-type method table carries a `__newindex` guard that silently swallows a
+  plain `meta.Name = fn` for a method that doesn't exist yet, leaving it nil.
+  `Compat.lua` added its post-3.3.5a shims (`SetSize`/`GetSize`,
+  `SetResizeBounds`, `Cooldown:Clear`, `RegisterUnitEvent`, the strata/level/
+  clip/ignore-alpha no-ops, `SetColorTexture`, `SetSpellByID`, …) by plain
+  assignment, so on a stock 3.3.5a client — where these shims actually run (they
+  no-op on the awesome_wotlk test client) — the adds were dropped and the methods
+  stayed nil, a latent crash. They now use `rawset`; the native-wrapping shims
+  (`CreateTexture`, `SetMask`, `SetHyperlink`, the fileID setters) keep plain
+  assignment since overriding an EXISTING key never trips the guard.
+
 ## [2.72-Release] — 2026-07-02
 
 Full-addon audit against the real 3.3.5a (12340) API. Same theme as the CLEU fix:
