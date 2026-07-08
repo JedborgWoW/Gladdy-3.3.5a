@@ -3,6 +3,29 @@
 All notable changes to this 3.3.5a backport are listed here. Newest on top.
 Version numbers follow the `.toc` `## Version:` and only change on an explicit release.
 
+## [2.72-Release] — 2026-07-08 (2)
+
+### Fixed — periodic ~1s stutters in arena (GC pressure from hot-path garbage)
+Three allocation fountains generated enough Lua garbage in arena for the client's
+GC to hitch visibly every so often:
+
+- **`ScanAuras` (`EventListener.lua`) ran `Gladdy:DeepCopy(button.auras)` on EVERY
+  `UNIT_AURA` of every arena unit** — a recursive copy of up to ~60 aura tuples,
+  doubling the per-scan allocations. Replaced with a double-buffer swap
+  (`auras`/`lastAuras` trade places; the stale container is wiped at the next scan).
+  Also added same-frame coalescing: multiple `UNIT_AURA` for one unit in one frame
+  now scan once (`UnitAura` always reads current state, so nothing is lost);
+  `JOINED_ARENA` clears the stamp so its forced rescan still runs.
+- **TotemPlates nameplate scanner allocated 30+ tables per 0.15s tick**:
+  `{ WorldFrame:GetChildren() }` + a fresh `currentPlates` set each tick, plus
+  `{GetRegions()}`/`{GetChildren()}` inside `IsNameplate` for every WorldFrame
+  child. Now uses two reused tables + a varargs collector (zero heap traffic),
+  and `IsNameplate`/`GetNameplateNameText` use `GetNum*`/`select` instead of
+  building tables.
+- **`TotemPlates.OnUpdate` built the string `"totem" .. id` every frame per totem
+  plate.** The options key is now precomputed once per totem data entry
+  (`entry.optionKey`).
+
 ## [2.72-Release] — 2026-07-08
 
 First real-arena test (Triumvirate). Two findings:

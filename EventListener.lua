@@ -45,6 +45,8 @@ function EventListener:JOINED_ARENA()
         if Gladdy.buttons["arena"..i].lastAuras then
             wipe(Gladdy.buttons["arena"..i].lastAuras)
         end
+        -- allow an immediate re-scan even within the same frame (see ScanAuras coalescing)
+        Gladdy.buttons["arena"..i].lastAuraScanTime = nil
         if Gladdy.buttons["arena"..i].lastCastSpell then
             wipe(Gladdy.buttons["arena"..i].lastCastSpell)
         end
@@ -348,6 +350,15 @@ function EventListener:ScanAuras(unit)
         return
     end
 
+    -- Coalesce multiple UNIT_AURA fired for the same unit in the same frame:
+    -- UnitAura always reads the CURRENT aura state, so a second scan in the same
+    -- frame sees identical data and only doubles the work and the garbage.
+    local now = GetTime()
+    if button.lastAuraScanTime == now then
+        return
+    end
+    button.lastAuraScanTime = now
+
     if not button.auras then
         button.auras = {}
     end
@@ -436,8 +447,12 @@ function EventListener:ScanAuras(unit)
             end
         end
     end
-    wipe(button.lastAuras)
-    button.lastAuras = Gladdy:DeepCopy(button.auras)
+    -- Double-buffer swap instead of DeepCopy: the aura tuples are built fresh each
+    -- scan, so lastAuras can take ownership of this scan's tables directly. The
+    -- DeepCopy ran on EVERY UNIT_AURA of every arena unit and its allocation churn
+    -- showed up as periodic GC hitches in arena. The stale container handed to
+    -- button.auras is wiped at the top of the next scan.
+    button.auras, button.lastAuras = button.lastAuras, button.auras
 end
 
 function EventListener:UpdateAuras(unit)

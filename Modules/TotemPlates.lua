@@ -1,4 +1,4 @@
-local select, pairs, tremove, tinsert, format, strsplit, tonumber, ipairs = select, pairs, tremove, tinsert, format, strsplit, tonumber, ipairs
+local select, pairs, tremove, tinsert, format, strsplit, tonumber, ipairs, wipe = select, pairs, tremove, tinsert, format, strsplit, tonumber, ipairs, wipe
 local UnitExists, UnitIsUnit, UnitIsEnemy, UnitGUID = UnitExists, UnitIsUnit, UnitIsEnemy, UnitGUID
 local Gladdy = LibStub("Gladdy")
 local L = Gladdy.L
@@ -19,6 +19,14 @@ for name, entry in pairs(totemData) do
     -- totemData is keyed by string_lower(totemName)
     totemNameToData[name] = entry
 end
+-- Precompute the options key: OnUpdate ran "totem" .. id per frame per totem
+-- nameplate, and that string churn adds up to GC hitches in totem-heavy fights.
+for _, entry in pairs(totemData) do
+    if entry.id then entry.optionKey = "totem" .. entry.id end
+end
+for _, entry in pairs(npcIdToTotemData) do
+    if entry.id then entry.optionKey = "totem" .. entry.id end
+end
 
 -- In 3.3.5a, nameplates are children of WorldFrame.
 -- A nameplate child typically has regions: healthBar, nameText, etc.
@@ -30,13 +38,13 @@ local function IsNameplate(frame)
     if name and name:find("^NamePlate") then
         return true
     end
-    -- Heuristic: check for a health bar region (first child region is often the health bar)
-    local regions = { frame:GetRegions() }
-    if #regions < 2 then return false end
-    local children = { frame:GetChildren() }
-    if #children < 1 then return false end
-    -- Check if first child looks like a statusbar (health bar)
-    local firstChild = children[1]
+    -- Heuristic: a nameplate has 2+ regions and its first child is the health
+    -- StatusBar. Use GetNum* and the first return value only - building
+    -- {GetRegions()}/{GetChildren()} tables here ran for every WorldFrame child
+    -- on every scan tick and the allocation churn caused GC hitches in arena.
+    if frame:GetNumRegions() < 2 then return false end
+    if frame:GetNumChildren() < 1 then return false end
+    local firstChild = frame:GetChildren()
     if firstChild and firstChild.GetObjectType and firstChild:GetObjectType() == "StatusBar" then
         return true
     end
@@ -54,9 +62,10 @@ local function GetNameplateNameText(frame)
         local text = frame.unitFrame.name:GetText()
         if text then return text end
     end
-    -- Default 3.3.5a nameplate: name is typically the second region (a FontString)
-    local regions = { frame:GetRegions() }
-    for _, region in ipairs(regions) do
+    -- Default 3.3.5a nameplate: name is typically the second region (a FontString).
+    -- select-loop instead of a {GetRegions()} table - this runs for every plate that appears.
+    for i = 1, frame:GetNumRegions() do
+        local region = select(i, frame:GetRegions())
         if region.GetText and region:IsObjectType("FontString") then
             local text = region:GetText()
             if text and text ~= "" then
@@ -288,6 +297,19 @@ local scannerFrame = CreateFrame("Frame")
 scannerFrame.elapsed = 0
 scannerFrame.knownPlates = {} -- [nameplateFrame] = true
 
+-- Reused between scans: allocating these fresh every 0.15s (plus a
+-- { WorldFrame:GetChildren() } table each tick) churned enough garbage to cause
+-- visible GC hitches in arena. Varargs + select never touch the Lua heap.
+local currentPlates = {}
+local worldChildren = {}
+local function CollectWorldChildren(...)
+    local n = select("#", ...)
+    for i = 1, n do
+        worldChildren[i] = select(i, ...)
+    end
+    return n
+end
+
 local function ScannerOnUpdate(self, elapsed)
     self.elapsed = self.elapsed + elapsed
     if self.elapsed < SCAN_INTERVAL then return end
@@ -295,9 +317,11 @@ local function ScannerOnUpdate(self, elapsed)
 
     if not Gladdy.db.npTotems then return end
 
-    local currentPlates = {}
-    local children = { WorldFrame:GetChildren() }
-    for _, child in ipairs(children) do
+    wipe(currentPlates)
+    wipe(worldChildren)
+    local numChildren = CollectWorldChildren(WorldFrame:GetChildren())
+    for i = 1, numChildren do
+        local child = worldChildren[i]
         if child:IsVisible() and IsNameplate(child) then
             currentPlates[child] = true
             if not self.knownPlates[child] then
@@ -662,7 +686,7 @@ function TotemPlates:ToggleAddon(nameplate, show)
 end
 
 function TotemPlates.OnUpdate(self)
-    local db = self.totemDataEntry.npc and self.totemDataEntry or Gladdy.db.npTotemOptions["totem" .. self.totemDataEntry.id]
+    local db = self.totemDataEntry.npc and self.totemDataEntry or Gladdy.db.npTotemOptions[self.totemDataEntry.optionKey]
     -- In 3.3.5a we may not have a unitID; guard against nil
     local hasUnit = self.unitID and UnitExists(self.unitID)
     if hasUnit and (UnitIsUnit("mouseover", self.unitID) or UnitIsUnit("target", self.unitID)) and db.alpha > 0 then
