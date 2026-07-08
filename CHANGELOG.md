@@ -3,6 +3,22 @@
 All notable changes to this 3.3.5a backport are listed here. Newest on top.
 Version numbers follow the `.toc` `## Version:` and only change on an explicit release.
 
+## [2.72-Release] — 2026-07-09
+
+### Fixed — bundled AceConfigDialog-3.0 aborted on load (`DialogBorderOpaqueTemplate`)
+- The bundled AceConfigDialog (r81+) builds its confirm popup in its MAIN CHUNK
+  with `CreateFrame(..., "DialogBorderOpaqueTemplate")` — a retail nine-slice
+  template that doesn't exist on 3.3.5a, where an unknown template is a hard
+  error. The whole library file aborted at load, so Gladdy's (newest) minor never
+  registered and options only worked when some OTHER addon provided an older
+  AceConfigDialog. The Compat `CreateFrame` wrapper now (a) recreates the
+  `DialogBorder*Template` look with the native StaticPopup backdrop
+  (`UI-DialogBox-Background[-Dark]` + `UI-DialogBox-Border`), and (b) falls back
+  to a template-less frame for any other unknown template instead of letting the
+  caller's file die (same policy as the CreateTexture shim). The rest of that
+  popup block was already covered by existing shims (`SetPropagateKeyboardInput`,
+  `SetFixedFrameStrata/Level`, fileID→path for the dialog button textures).
+
 ## [2.72-Release] — 2026-07-08 (2)
 
 ### Fixed — periodic ~1s stutters in arena (GC pressure from hot-path garbage)

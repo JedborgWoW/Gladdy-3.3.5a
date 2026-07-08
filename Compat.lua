@@ -491,18 +491,49 @@ if not tooltipMeta.SetSpellByID then
 end
 
 --==========================================================================
--- (D) "BackdropTemplate" does not exist on 3.3.5a (all frames have a backdrop
--- natively); passing it to CreateFrame errors. The current tree has none left,
--- but wrapping CreateFrame to strip the token keeps it safe across future
--- upstream merges. Done LAST so the metatable sampling above used the original
+-- (D) Templates that do not exist on 3.3.5a. CreateFrame hard-errors on an
+-- unknown template, which aborts the CALLER'S whole file when hit in a main
+-- chunk. Done LAST so the metatable sampling above used the original
 -- CreateFrame.
+--   * "BackdropTemplate" (8.0): all 3.3.5a frames have a backdrop natively -
+--     strip the token.
+--   * "DialogBorder*Template" (retail dialog nine-slice): AceConfigDialog r81+
+--     builds its confirm popup with it IN ITS MAIN CHUNK, so the whole library
+--     aborted on load (options then only worked if some other addon registered
+--     an older AceConfigDialog). Recreate the look with the native StaticPopup
+--     backdrop on the created frame.
+--   * Any other unknown template: retry without it - an undecorated frame
+--     beats aborting the caller (same policy as the CreateTexture shim).
 --==========================================================================
+local dialogBorderBackgrounds = {
+    DialogBorderTemplate = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    DialogBorderOpaqueTemplate = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+    DialogBorderDarkTemplate = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+}
 local origCreateFrame = CreateFrame
 function CreateFrame(frameType, name, parent, template, ...)
     if type(template) == "string" and template:find("BackdropTemplate") then
         template = template:gsub("BackdropTemplate", "")
         template = template:gsub(",%s*,", ","):gsub("^[%s,]+", ""):gsub("[%s,]+$", "")
         if template == "" then template = nil end
+    end
+    if type(template) == "string" then
+        local dialogBg = dialogBorderBackgrounds[template]
+        if dialogBg then
+            local frame = origCreateFrame(frameType, name, parent)
+            frame:SetBackdrop({
+                bgFile = dialogBg,
+                edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                tile = true, tileSize = 32, edgeSize = 32,
+                insets = { left = 11, right = 12, top = 12, bottom = 11 },
+            })
+            return frame
+        end
+        local ok, frame = pcall(origCreateFrame, frameType, name, parent, template, ...)
+        if ok and frame then
+            return frame
+        end
+        return origCreateFrame(frameType, name, parent)
     end
     return origCreateFrame(frameType, name, parent, template, ...)
 end
