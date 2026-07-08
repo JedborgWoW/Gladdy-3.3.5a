@@ -5,6 +5,21 @@ Version numbers follow the `.toc` `## Version:` and only change on an explicit r
 
 ## [2.72-Release] — 2026-07-09
 
+### Fixed — totem icons lingering after the arena (TotemPlates recycle detection)
+- Nameplate frames are RECYCLED by the client. The scanner only tracked frame
+  membership (appeared/disappeared), so when an arena totem's plate got reused
+  for a player — often without ever being invisible on a 0.15s scan tick — the
+  totem skin stayed attached and rode the player's plate into the staging room.
+  `knownPlates` now stores the unit NAME each plate was last evaluated for and
+  re-evaluates on any name change (release old skin, re-run the add path). This
+  also fixes the mirror case: a recycled plate that BECOMES a totem was never
+  re-skinned before, and a plate whose name hadn't resolved on first sight was
+  permanently skipped (nil names now retry next tick).
+- The totem skin's `OnHide` handler did `SetParent(nil)` while the frame's own
+  shown flag was still true (it fires when the PARENT plate hides), so the skin
+  came back as a parentless icon glued to the old plate's anchor. It now just
+  syncs its own flag with `self:Hide()`.
+
 ### Fixed — bundled AceConfigDialog-3.0 aborted on load (`DialogBorderOpaqueTemplate`)
 - The bundled AceConfigDialog (r81+) builds its confirm popup in its MAIN CHUNK
   with `CreateFrame(..., "DialogBorderOpaqueTemplate")` — a retail nine-slice

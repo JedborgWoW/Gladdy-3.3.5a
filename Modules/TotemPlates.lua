@@ -324,10 +324,20 @@ local function ScannerOnUpdate(self, elapsed)
         local child = worldChildren[i]
         if child:IsVisible() and IsNameplate(child) then
             currentPlates[child] = true
-            if not self.knownPlates[child] then
-                -- New nameplate appeared
-                self.knownPlates[child] = true
-                TotemPlates:OnNameplateAdded(child)
+            -- knownPlates stores the unit NAME the plate was last evaluated for.
+            -- Plate frames are RECYCLED by the client: the same frame can go from
+            -- a totem to a player without being invisible on any scan tick (seen
+            -- after arena: totem skins riding players' plates in the staging
+            -- room), so membership alone is not identity. Re-evaluate whenever
+            -- the name changes; a nil name (not yet resolved) is retried next
+            -- tick instead of permanently marking the plate as seen.
+            local nameText = GetNameplateNameText(child)
+            if nameText and nameText ~= self.knownPlates[child] then
+                if self.knownPlates[child] then
+                    TotemPlates:OnNameplateRemoved(child)
+                end
+                self.knownPlates[child] = nameText
+                TotemPlates:OnNameplateAdded(child, nameText)
             end
         end
     end
@@ -354,8 +364,8 @@ function TotemPlates:StopScanner()
     scannerFrame.knownPlates = {}
 end
 
-function TotemPlates:OnNameplateAdded(nameplate)
-    local nameText = GetNameplateNameText(nameplate)
+function TotemPlates:OnNameplateAdded(nameplate, nameText)
+    nameText = nameText or GetNameplateNameText(nameplate)
     if not nameText then return end
 
     local totemDataEntry = totemNameToData[nameText:lower()]
@@ -619,8 +629,11 @@ function TotemPlates:CreateTotemFrame(nameplate)
     nameplate.gladdyTotemFrame.selectionHighlight:SetPoint("BOTTOMRIGHT", nameplate.gladdyTotemFrame, "BOTTOMRIGHT", -Gladdy.db.npTotemPlatesSize/16, Gladdy.db.npTotemPlatesSize/16)
     nameplate.gladdyTotemFrame:SetScript('OnUpdate', TotemPlates.OnUpdate)
     nameplate.gladdyTotemFrame:SetScript("OnHide", function(self)
-        self.parent = nil
-        self:SetParent(nil)
+        -- Also fires when the parent plate hides. Sync the frame's OWN shown flag:
+        -- the previous SetParent(nil) here ran while that flag was still true, so
+        -- the skin re-appeared as a parentless icon still glued to the old plate's
+        -- anchor. Hide() cannot recurse: the flag is false on the second entry.
+        self:Hide()
     end)
 end
 
