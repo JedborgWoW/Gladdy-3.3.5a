@@ -3,6 +3,37 @@
 All notable changes to this 3.3.5a backport are listed here. Newest on top.
 Version numbers follow the `.toc` `## Version:` and only change on an explicit release.
 
+## [2.72-Release] — 2026-07-08
+
+First real-arena test (Triumvirate). Two findings:
+
+### Fixed — `CooldownCheck` crash on number-form cooldown entries
+- `EventListener.lua:104`: `attempt to index local 'cooldown' (a number value)`.
+  Cooldown-list entries are either a table (`{cd = 30, ...}`) or a plain number
+  (`[2565] = 60` — Shield Block). `CooldownCheck` indexed `.dispel` without a
+  type check, so EVERY number-form cooldown spell crashed the handler and its
+  cooldown icon never started — for both the `UNIT_SPELLCAST_SUCCEEDED` and the
+  CLEU path. In the import since day one; first reachable now that cast/CLEU
+  tracking actually fires. Now `type(cooldown) == "table"` gates the flag read.
+- The same function's `if not cooldown then return end` also made the
+  class-or-race fallback below unreachable, so RACIAL cooldowns (keyed by race,
+  e.g. Will of the Forsaken) never started their icons from casts. Early return
+  removed; the dispel branch keeps its entry-present guard.
+
+### Fixed — dead enemies kept showing stale health (no "DEAD", bars frozen)
+- On clients with a NATIVE `RegisterUnitEvent` (awesome_wotlk-based, e.g.
+  Triumvirate) the Compat block that registers the genuine 3.3.5a unit events
+  was skipped entirely — but the modern names the modules register
+  (`UNIT_HEALTH_FREQUENT`, `UNIT_POWER_UPDATE`, `UNIT_MAXPOWER`) never fire
+  there either. Health/power bars only updated on spot/seen snapshots, and the
+  0-hp death path never ran: a dead enemy sat at its last snapshot (seen live:
+  54% on a corpse). The `RegisterUnitEvent` wrapper now installs on both client
+  kinds: the modern event goes through the native API when present, the 3.3.5a
+  legacy events (`UNIT_HEALTH`, `UNIT_MANA`/`UNIT_RAGE`/…) are always registered
+  as aliases and translated back to the modern name in dispatch. Translation is
+  per-frame (only for events that frame requested), so foreign addons calling
+  the native `RegisterUnitEvent` keep their own event names.
+
 ## [2.72-Release] — 2026-07-04
 
 ### Fixed — widget-metatable shims

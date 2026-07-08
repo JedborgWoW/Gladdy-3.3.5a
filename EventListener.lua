@@ -98,14 +98,16 @@ function EventListener:CooldownCheck(eventType, srcUnit, spellName, spellID)
     local canonicalSpellID = Cooldowns:GetCanonicalSpellID(spellID)
     local cooldown = Gladdy:GetCooldownList()[Gladdy.buttons[srcUnit].class][canonicalSpellID]
 
-    if not cooldown then
-        return
-    end
-    if eventType ~= "SPELL_DISPEL" and cooldown.dispel then
-        return
-    end
+    -- Cooldown-list entries are either a plain number (seconds) or a table; only
+    -- tables carry flags like .dispel. A nil entry must NOT bail out early either:
+    -- racial cooldowns are keyed by RACE, reached via the class-or-race fallback below.
     if eventType == "SPELL_DISPEL" then
-        Gladdy:SendMessage("DISPEL_USED", srcUnit, canonicalSpellID)
+        if cooldown then
+            Gladdy:SendMessage("DISPEL_USED", srcUnit, canonicalSpellID)
+        end
+        return
+    end
+    if type(cooldown) == "table" and cooldown.dispel then
         return
     end
     if Gladdy.db.cooldown and Cooldowns:GetCanonicalSpellID(spellID) then

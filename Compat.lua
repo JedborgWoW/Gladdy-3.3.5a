@@ -244,40 +244,42 @@ if not frameMeta.SetIgnoreParentAlpha then rawset(frameMeta, "SetIgnoreParentAlp
 --     No-op on 3.3.5a: the frame just inherits the parent's scale (cosmetic).
 if not frameMeta.SetIgnoreParentScale then rawset(frameMeta, "SetIgnoreParentScale", noop) end
 
--- (J) RegisterUnitEvent (MoP): missing on STOCK 3.3.5a (many private cores -
---     incl. the one this is tested on - backport it; if present we leave it
---     alone, so this whole block is inert on awesome_wotlk). Healthbar/Powerbar/
---     Castbar/Pets register per-unit events and their OnEvent handlers trust the
---     event only fires for that unit. 3.3.5a fires unit events for ALL units, so
---     map RegisterUnitEvent -> RegisterEvent plus a per-frame unit filter: take
---     over the frame's OnEvent with a dispatcher and intercept this frame's
---     SetScript/GetScript("OnEvent") so the module's handler only runs for a
---     matching unit (unit-less events pass through).
---
---     ALSO: several events the modules request are themselves post-3.3.5a renames
---     (UNIT_HEALTH_FREQUENT = Cata, UNIT_POWER_UPDATE/UNIT_MAXPOWER = Cata/MoP).
---     On stock they never fire, so the health/power bars would freeze. Register
---     the genuine 3.3.5a events too and translate them back to the modern name in
---     dispatch (the handlers either are name-agnostic or branch on the modern
---     name). This only runs on stock; awesome_wotlk uses its native events.
+-- (J) RegisterUnitEvent (MoP): missing on STOCK 3.3.5a. awesome_wotlk-based
+--     clients (e.g. Triumvirate) DO expose it natively - but even there the
+--     modern event NAMES the modules register (UNIT_HEALTH_FREQUENT = Cata,
+--     UNIT_POWER_UPDATE/UNIT_MAXPOWER = Cata/MoP) never actually fire (seen in
+--     a real arena 2026-07-08: health froze at spot-time snapshots and the 0-hp
+--     death path never ran, so a dead enemy kept showing stale health). So the
+--     wrapper must be installed on BOTH kinds of client, not only when
+--     RegisterUnitEvent is absent:
+--       * the modern event goes through the native RegisterUnitEvent when one
+--         exists, else through RegisterEvent. 3.3.5a fires unit events for ALL
+--         units, so add a per-frame unit filter: take over the frame's OnEvent
+--         with a dispatcher and intercept this frame's SetScript/GetScript
+--         ("OnEvent") so the module's handler only runs for a matching unit
+--         (unit-less events pass through).
+--       * ALSO register the genuine 3.3.5a events and translate them back to
+--         the modern name in dispatch (the handlers either are name-agnostic or
+--         branch on the modern name). The translation uses a PER-FRAME alias
+--         map filled only for events that frame requested, so foreign frames
+--         going through a native RegisterUnitEvent keep their event names.
 local modernToLegacy = {
     UNIT_HEALTH_FREQUENT = { "UNIT_HEALTH" },
     UNIT_POWER_UPDATE = { "UNIT_MANA", "UNIT_RAGE", "UNIT_ENERGY", "UNIT_FOCUS", "UNIT_RUNIC_POWER", "UNIT_HAPPINESS" },
     UNIT_MAXPOWER = { "UNIT_MAXMANA", "UNIT_MAXRAGE", "UNIT_MAXENERGY", "UNIT_MAXFOCUS", "UNIT_MAXRUNIC_POWER", "UNIT_MAXHAPPINESS" },
 }
-local legacyToModern = {}
-for modern, legacies in pairs(modernToLegacy) do
-    for _, leg in ipairs(legacies) do legacyToModern[leg] = modern end
-end
-if not frameMeta.RegisterUnitEvent then
+do
+    local origRegisterUnitEvent = frameMeta.RegisterUnitEvent
     local origSetScript = frameMeta.SetScript
     local origGetScript = frameMeta.GetScript
     local function unitDispatch(self, event, unit, ...)
         local filter = self.__gladdyUnitFilter
         if filter and unit ~= nil and not filter[unit] then return end
         local handler = self.__gladdyOnEvent
-        -- translate a 3.3.5a event back to the modern name the handler expects
-        if handler then return handler(self, legacyToModern[event] or event, unit, ...) end
+        if not handler then return end
+        -- translate a 3.3.5a event back to the modern name this frame asked for
+        local alias = self.__gladdyEventAlias
+        return handler(self, alias and alias[event] or event, unit, ...)
     end
     rawset(frameMeta, "RegisterUnitEvent", function(self, event, unit1, unit2)
         self.__gladdyUnitFilter = self.__gladdyUnitFilter or {}
@@ -301,11 +303,18 @@ if not frameMeta.RegisterUnitEvent then
                 return origGetScript(f, script)
             end
         end
-        self:RegisterEvent(event)
-        -- also register the genuine 3.3.5a equivalents so the bar updates on stock
+        if origRegisterUnitEvent then
+            origRegisterUnitEvent(self, event, unit1, unit2)
+        else
+            self:RegisterEvent(event)
+        end
+        -- also register the genuine 3.3.5a equivalents so the bar updates even
+        -- when the client accepts the modern name but never fires it
         local legacies = modernToLegacy[event]
         if legacies then
+            self.__gladdyEventAlias = self.__gladdyEventAlias or {}
             for _, leg in ipairs(legacies) do
+                self.__gladdyEventAlias[leg] = event
                 pcall(self.RegisterEvent, self, leg)
             end
         end
