@@ -5,6 +5,17 @@ Version numbers follow the `.toc` `## Version:` and only change on an explicit r
 
 ## [2.72-Release] — 2026-07-09
 
+### Fixed — TotemPulse's nameplate scanner still churned garbage (missed by the a6f8640 GC pass)
+- TotemPulse runs its OWN 0.2s WorldFrame scanner, separate from TotemPlates',
+  and it kept all three patterns the TotemPlates fix removed: a fresh
+  `currentNameplates` set every tick, `select(i, WorldFrame:GetChildren())`
+  re-pushing the entire child list once per index (O(n²)), and `IsNameplate`
+  building a `{GetChildren()}` table for every candidate that failed the
+  border-texture check — which is EVERY plate on cores where the border isn't
+  region 2, every non-plate child always. Now uses the same reused
+  set + varargs collector, first-return-only child check, and a select-loop in
+  `GetNameplateVisibleName` instead of a `{GetRegions()}` table.
+
 ### Fixed — totem icons lingering after the arena (TotemPlates recycle detection)
 - Nameplate frames are RECYCLED by the client. The scanner only tracked frame
   membership (appeared/disappeared), so when an arena totem's plate got reused

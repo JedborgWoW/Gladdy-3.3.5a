@@ -22,20 +22,22 @@ local function IsNameplate(frame)
     if region and region:GetObjectType() == "Texture" and region:GetTexture() == [[Interface\Tooltips\Nameplate-Border]] then
         return true
     end
-    -- Alternative check: first child is a StatusBar (health bar)
-    local children = { frame:GetChildren() }
-    if #children >= 1 then
-        local healthBar = children[1]
-        if healthBar and healthBar:GetObjectType() == "StatusBar" then
-            return true
-        end
+    -- Alternative check: first child is a StatusBar (health bar). First return
+    -- only - building a {GetChildren()} table here ran for every candidate
+    -- WorldFrame child that failed the texture check, on every 0.2s scan tick,
+    -- and the allocation churn caused GC hitches in arena (same fix as the
+    -- TotemPlates scanner, commit a6f8640).
+    local healthBar = frame:GetChildren()
+    if healthBar and healthBar.GetObjectType and healthBar:GetObjectType() == "StatusBar" then
+        return true
     end
     return false
 end
 
 local function GetNameplateVisibleName(frame)
-    local regions = { frame:GetRegions() }
-    for _, region in pairs(regions) do
+    -- select-loop instead of a {GetRegions()} table - runs per plate that appears.
+    for i = 1, frame:GetNumRegions() do
+        local region = select(i, frame:GetRegions())
         if region:GetObjectType() == "FontString" then
             local text = region:GetText()
             if text and text ~= "" then
@@ -342,13 +344,28 @@ function TotemPulse:StopNameplateScan()
     end
 end
 
+-- Reused between scans (same fix as the TotemPlates scanner, commit a6f8640):
+-- a fresh set table each 0.2s tick churned garbage, and re-calling
+-- `select(i, WorldFrame:GetChildren())` per child pushed the ENTIRE child list
+-- onto the stack once per index (O(n^2)). Varargs + select into a persistent
+-- buffer never touch the Lua heap.
+local currentNameplates = {}
+local worldChildren = {}
+local function CollectWorldChildren(...)
+    local n = select("#", ...)
+    for i = 1, n do
+        worldChildren[i] = select(i, ...)
+    end
+    return n
+end
+
 function TotemPulse:ScanNameplates()
-    local numChildren = WorldFrame:GetNumChildren()
-    -- Build a set of currently visible nameplates
-    local currentNameplates = {}
+    wipe(currentNameplates)
+    wipe(worldChildren)
+    local numChildren = CollectWorldChildren(WorldFrame:GetChildren())
     for i = 1, numChildren do
-        local child = select(i, WorldFrame:GetChildren())
-        if child and child:IsShown() and IsNameplate(child) then
+        local child = worldChildren[i]
+        if child:IsShown() and IsNameplate(child) then
             currentNameplates[child] = true
             if not self.trackedNameplates[child] then
                 -- Newly appeared nameplate
